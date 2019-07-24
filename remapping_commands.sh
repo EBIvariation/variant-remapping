@@ -46,7 +46,7 @@ samtools faidx $oldgenome
 cut -f1,2 "$oldgenome".fai > "$oldgenome".chrom.sizes
 
 #filter SNPs only
-bcftools filter -i 'TYPE="snp"' $vcfFile > snps_only.vcf
+bcftools filter -i 'TYPE="snp"' $vcffile > snps_only.vcf
 
 #store header
 awk '$1 ~ /^#/ {print $0}' snps_only.vcf > vcf_header.txt
@@ -54,7 +54,7 @@ awk '$1 ~ /^#/ {print $0}' snps_only.vcf > vcf_header.txt
 #convert vcf to bed:
 vcf2bed < snps_only.vcf > variants.bed
 #the actual position of the variant is the second coordinate
-rm snps_only.vcf
+#rm snps_only.vcf
 
 #generate the flanking sequence intervals
 bedtools flank -i variants.bed -g "$oldgenome".chrom.sizes -b 50 > flanking.bed
@@ -94,12 +94,12 @@ rm temp.txt
 
 #2) Mapping with bowtie2
 echo "---------------------------2) Mapping with bowtie2---------------------------"
-# index the target assembly
+# index the target assembly: longest step
 #"index" is the name of the output files, not a directory
-#mkdir "$newgenome"_index
-#bowtie2-build $newgenome "$newgenome"_index"/$newgenome"_index
-echo "Mapping results:"
-bowtie2 -f -x "$newgenome"_index"/$newgenome"_index variant_reads.out.fa | samtools view -bS - > reads_aligned.bam
+echo "#### Building index: may take a while ####"
+bowtie2-build $newgenome index
+echo "#### Mapping results: ####"
+bowtie2 -f -x index variant_reads.out.fa | samtools view -bS - > reads_aligned.bam
 #example output:
 #>1094 reads; of these:
 #>  1094 (100.00%) were unpaired; of these:
@@ -113,7 +113,7 @@ bowtie2 -f -x "$newgenome"_index"/$newgenome"_index variant_reads.out.fa | samto
 
 
 #3) Data extraction
-echo "------------------------------3) Data extraction-----------------------------"
+echo '------------------------------3) Data extraction-----------------------------'
 #extract chromosome, rsID, position on new genome, original variant allele, qual, filter and info fields
 #samtools view "$species"_reads_aligned.bam | awk '($1 ~ "|") {split($1,info,"|"); print $3"\t"$4+50"\t"info[4]"\t"info[3]"\t"info[5]"\t"info[6]"\t"info[7]}' > variants_remapped.vcf
 samtools sort reads_aligned.bam | samtools index - reads_aligned.bam.bai
@@ -128,7 +128,7 @@ rm reads_aligned.bam
 awk '{print $1"\t"$2-1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}' variants_remapped.vcf > variants_remapped.bed
 
 #getfasta to get the genome alleles and then extract the genome alleles without the positions
-bedtools getfasta -tab -fi droso_dm6.fasta -bed variants_remapped.bed | awk '{print $2}'> genome_alleles.txt
+bedtools getfasta -tab -fi $newgenome -bed variants_remapped.bed | awk '{print $2}'> genome_alleles.txt
 rm variants_remapped.bed
 
 #paste all the information into the correct columns
@@ -161,7 +161,7 @@ rm final_header.txt var_pre_final.vcf
 
 echo "-----------------------------------Results-----------------------------------"
 echo "Total number of input variants:"
-grep "^[^#]" $vcfFile | wc -l
+grep "^[^#]" $vcffile | wc -l
 echo "Total number of variants processed (after filters):"
 total=$(grep "^[^>]" variant_reads.out.fa | wc -l)
 echo $total
