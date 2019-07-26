@@ -6,7 +6,7 @@
 
 
 #example command:
-#time ./remapping_commands.sh -g droso_dm3.fasta -n droso_dm6.fasta -a GCA_000001215.4 -v droso_variants_renamed.vcf -o test.vcf
+#time ./remapping_commands.sh -g droso_dm3.fasta -n GCA_000001215.4_Release_6_plus_ISO1_MT_genomic.fna -a GCA_000001215.4 -v droso_variants_renamed.vcf -o test.vcf
 
 
 #To be added:
@@ -116,8 +116,9 @@ bowtie2 -f -x index variant_reads.out.fa | samtools view -bS - > reads_aligned.b
 echo '------------------------------3) Data extraction-----------------------------'
 #extract chromosome, rsID, position on new genome, original variant allele, qual, filter and info fields
 #samtools view "$species"_reads_aligned.bam | awk '($1 ~ "|") {split($1,info,"|"); print $3"\t"$4+50"\t"info[4]"\t"info[3]"\t"info[5]"\t"info[6]"\t"info[7]}' > variants_remapped.vcf
-samtools sort reads_aligned.bam | samtools index - reads_aligned.bam.bai
-./reverse_strand.py -i reads_aligned.bam -o variants_remapped.vcf
+samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
+samtools index reads_aligned.sorted.bam
+./reverse_strand.py -i reads_aligned.sorted.bam -o variants_remapped.vcf
 rm reads_aligned.bam
 
 #delete missing chromosomes (*)
@@ -130,11 +131,13 @@ awk '{print $1"\t"$2-1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}' variants_remapped.v
 #getfasta to get the genome alleles and then extract the genome alleles without the positions
 bedtools getfasta -tab -fi $newgenome -bed variants_remapped.bed | awk '{print $2}'> genome_alleles.txt
 rm variants_remapped.bed
+#make all alleles caps (sometimes there are lower-case bases)
+tr a-z A-Z < genome_alleles.txt > genome_alleles.fixed.txt
 
 #paste all the information into the correct columns
 awk '{print $1"\t"$2"\t"$3}' variants_remapped.vcf > temp_var1.txt
 awk '{print $4"\t"$5"\t"$6"\t"$7}' variants_remapped.vcf > temp_var2.txt
-paste temp_var1.txt genome_alleles.txt temp_var2.txt > var_pre_final.vcf
+paste temp_var1.txt genome_alleles.fixed.txt temp_var2.txt > var_pre_final.vcf
 rm temp_var1.txt temp_var2.txt genome_alleles.txt variants_remapped.vcf
 
 #header:
@@ -171,8 +174,7 @@ echo $remapped
 echo "Percentage of remapped variants:"
 percentage=$(bc <<< "scale=3;($remapped/$total)*100")
 echo $percentage"%"
-echo ""
-echo "Runtime:"
+
 
 
 

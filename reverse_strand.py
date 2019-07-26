@@ -19,15 +19,15 @@ for read in bamfile:
 	name=read.read_name
 	info=name.split("|")
 	#mapped onto reverse strand:
-	if read.flag==16:
+	if read.flag & 16: #decoding bitwise flag with &; may need to be changed back to ==
 		if info[2]=='A':
-			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+50,info[3],"T",info[4],info[5],info[6]))
+			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+51,info[3],"T",info[4],info[5],info[6]))
 		elif info[2]=='T':
-			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+50,info[3],"A",info[4],info[5],info[6]))
+			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+51,info[3],"A",info[4],info[5],info[6]))
 		elif info[2]=='C':
-			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+50,info[3],"G",info[4],info[5],info[6]))
+			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+51,info[3],"G",info[4],info[5],info[6]))
 		elif info[2]=='G':
-			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+50,info[3],"C",info[4],info[5],info[6]))
+			outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+51,info[3],"C",info[4],info[5],info[6]))
 	#only mapped onto direct strand:
 	elif read.flag==0:
 		outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,read.pos+50,info[3],info[2],info[4],info[5],info[6]))
