@@ -1,6 +1,5 @@
 # variant-remapping
-## Description
-The pipeline for remapping VCF variants between two arbitrary FASTA assemblies. No chain file required.
+Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA format. No chain file is required.
 
 **Method**: creates reads from the flanking sequences of each variant, then maps them to the new assembly using bowtie2.
 
@@ -16,9 +15,9 @@ Prerequisites:
 - bcftools
 
 ## Input
-- Old genome assembly file (fasta format): the genome you have variants for.
-- New genome assembly file (fasta format): the genome you want to remap the variants to.
-- Variants file (vcf format): contains the list of variants you want to remap.
+- Old genome assembly file (FASTA format): the genome you have variants for.
+- New genome assembly file (FASTA format): the genome you want to remap the variants to.
+- Variants file (VCF format): contains the list of variants you want to remap.
 - Accession name for the new assembly: required to recreate the header for the output VCF file.
 
 ## Output
