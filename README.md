@@ -1,24 +1,30 @@
 # variant-remapping
-## Description
-The pipeline for remapping VCF variants between two arbitrary FASTA assemblies. No chain file required.
+Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA format. No chain file is required.
 
 **Method**: creates reads from the flanking sequences of each variant, then maps them to the new assembly using bowtie2.
 
 Currently, it only supports SNPs, and not indels.
 
-Prerequisites:
-- reverse_strand.py, included (reverse strand allele correction, uses bamnostic)
-- write_header.py, included (necessary for VCF header generation)
-- vcf2bed
-- bowtie2
-- samtools
-- bedtools
-- bcftools
+**Prerequisites:**
+- reverse_strand.py, included (uses [bamnostic](https://github.com/betteridiot/bamnostic), allows reverse strand allele correction (see Note below for further explanation))
+- [vcf2bed](https://bedops.readthedocs.io/en/latest/content/reference/file-management/conversion/vcf2bed.html)
+- [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
+- [samtools](http://www.htslib.org/download/)
+- [bedtools](https://bedtools.readthedocs.io/en/latest/)
+- [bcftools](http://www.htslib.org/download/)
+
+**Note about the reverse strand correction:**  
+When a variant is mapped to the reverse strand, the corresponding allele in the output VCF file is reversed, aka converted to the forward strand, as alleles in VCF files are always described on the forward strand. For example:
+INPUT VCF:
+Old genome: G (ref allele) --> A (variant allele)
+This maps onto the new genome on the reverse strand:
+OUTPUT VCF:
+New genome: C (ref allele) --> T (variant allele)
 
 ## Input
-- Old genome assembly file (fasta format): the genome you have variants for.
-- New genome assembly file (fasta format): the genome you want to remap the variants to.
-- Variants file (vcf format): contains the list of variants you want to remap.
+- Old genome assembly file (FASTA format): the genome you have variants for.
+- New genome assembly file (FASTA format): the genome you want to remap the variants to.
+- Variants file (VCF format): contains the list of variants you want to remap.
 - Accession name for the new assembly: required to recreate the header for the output VCF file.
 
 ## Output
@@ -43,7 +49,7 @@ Console output:
 
 ## Usage
 First, make sure the scripts are executable:
-`chmod a+x remapping_commands.sh reverse_strand.py write_header.py`
+`chmod a+x remapping_commands.sh reverse_strand.py`
 
 Command usage: (see Input for details)
 `./remapping_commands.sh -g [oldgenome] -n [newgenome] -a [newgenomeaccession] -v [vcffile] -o [outfile name]`
@@ -86,4 +92,5 @@ sys	0m0.171s
 - [x] Create a command line version
 - [x] Calculate % of remapped variants
 - [ ] Support for indels
-- [ ] Find a way to extract new assembly accession so it's not required as input?
+- [ ] Find a way to extract new assembly accession so it's not required as input? or just use new assembly file name?
+- [ ] Decide what to do in the case of new REF allele being the same as the variant allele (was A > G on old assembly, now is G > G on new assembly)
