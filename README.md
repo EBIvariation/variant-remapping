@@ -91,6 +91,6 @@ sys	0m0.171s
 - [x] Take into account reverse strand mapping (the REF alleles change)
 - [x] Create a command line version
 - [x] Calculate % of remapped variants
+- [x] If REF=ALT after remapping, the old REF allele is used instead of the new REF, and the alleles are then swapped
 - [ ] Support for indels
 - [ ] Find a way to extract new assembly accession so it's not required as input? or just use new assembly file name?
-- [ ] Decide what to do in the case of new REF allele being the same as the variant allele (was A > G on old assembly, now is G > G on new assembly)
