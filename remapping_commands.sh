@@ -45,7 +45,7 @@ vcf2bed < snps_only.vcf > variants.bed
 #the actual position of the variant is the second coordinate
 
 #generate the flanking sequence intervals
-bedtools slop -i variants.bed -g ../"$oldgenome".chrom.sizes -b 50 > flanking.bed
+bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b 50 > flanking.bed
 
 
 #get the fasta sequences for these intervals
@@ -117,7 +117,11 @@ samtools index reads_aligned.sorted.bam
 .././reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf
 
 #add interval for variant position in bed format (required by getfasta)
-
+#reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a bed file
+#Input: 
+#[chr]	[pos]	[rsID]	[ALT]	[QUAL]	[FILT]	[INFO]
+#Output:
+#[chr]	[pos-1]	[pos]	[rsID]	[ALT]	[QUAL]	[FILT]	[INFO]
 awk '{print $1"\t"$2-1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}' variants_remapped.vcf > variants_remapped.bed
 
 #getfasta to get the REF genome alleles and then extract the genome alleles without the positions
@@ -126,8 +130,8 @@ bedtools getfasta -tab -fi ../"$newgenome" -bed variants_remapped.bed | awk '{pr
 tr a-z A-Z < genome_alleles.txt > genome_alleles.fixed.txt
 
 #paste all the information into the correct columns
-awk '{print $1"\t"$2"\t"$3}' variants_remapped.vcf > temp_first_3_columns.txt
-awk '{print $4"\t"$5"\t"$6"\t"$7}' variants_remapped.vcf > temp_last_4_columns.txt
+cut -f1-3 variants_remapped.vcf > temp_first_3_columns.txt
+cut -f4-7 variants_remapped.vcf > temp_last_4_columns.txt
 paste temp_first_3_columns.txt genome_alleles.fixed.txt temp_last_4_columns.txt > var_pre_final.vcf
 
 #header:
@@ -157,8 +161,12 @@ cat final_header.txt | cat - old_ref_alleles.txt > temp && mv temp old_ref_allel
 bgzip pre_final_vcf.vcf
 bcftools norm -c ws -f ../"$newgenome" -N pre_final_vcf.vcf.gz -o ../"$outfile" -O v
 
-rm -R "$TMPDIR"
+cd ../
+bgzip "$outfile"
+bcftools stats "$outfile".gz > stats.txt
+gzip -d "$outfile".gz
 
+cd "$TMPDIR"
 echo "-----------------------------------Results-----------------------------------"
 echo "Total number of input variants:"
 grep "^[^#]" ../"$vcffile" | wc -l
@@ -171,3 +179,6 @@ echo $remapped
 echo "Percentage of remapped variants:"
 percentage=$(bc <<< "scale=3;($remapped/$total)*100")
 echo $percentage"%"
+
+cd ../
+rm -R "$TMPDIR"

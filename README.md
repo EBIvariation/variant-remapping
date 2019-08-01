@@ -6,7 +6,7 @@ Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA fo
 Currently, it only supports SNPs, and not indels.
 
 **Prerequisites:**
-- reverse_strand.py, included (uses [bamnostic](https://github.com/betteridiot/bamnostic), allows reverse strand allele correction (see Note below for further explanation))
+- reverse_strand.py, included (uses pysam, allows reverse strand allele correction (see Note below for further explanation))
 - [vcf2bed](https://bedops.readthedocs.io/en/latest/content/reference/file-management/conversion/vcf2bed.html)
 - [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
 - [samtools](http://www.htslib.org/download/)
