@@ -48,16 +48,19 @@ vcf2bed < snps_only.vcf > variants.bed
 #generate the flanking sequence intervals
 bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b 50 > flanking.bed
 
-
 #get the fasta sequences for these intervals
 bedtools getfasta -fi ../"$oldgenome" -bed flanking.bed -fo variants_reads.fa
+
+#filter out reads that aren't 101 bases long (origin: variant too close to the start or end of the chromosome)
+awk '($0 ~ ">"){name=$0};($0 !~ ">" && length($0) == 101){print name; print $0}' variants_reads.fa > \
+	variants_read_filtered.fa
 
 #replace the colon separators with "|":
 #storing this information for later on in the script when we split the name by "|" to extract the relevant information 
 #(ALT allele, QUAL, FILT, INFO)
 #this is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
 #chosen
-sed -i 's/:/|/' variants_reads.fa
+sed -i 's/:/|/' variants_read_filtered.fa
 
 #store ref bases
 awk '{print $6}' flanking.bed > old_ref_bases.txt
@@ -72,8 +75,8 @@ awk '{print $7}' flanking.bed > variant_bases.txt
 awk '{print $5, $8, $9}' flanking.bed > qual_filt_info.txt
 
 #paste the names, variant bases, then fasta sequences into a new file
-paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-  <(grep -v '^>' variants_reads.fa) > temp.txt
+paste <(grep '^>' variants_read_filtered.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
+  <(grep -v '^>' variants_read_filtered.fa) > temp.txt
 
 #reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
 #command is a bit ugly
