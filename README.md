@@ -1,12 +1,14 @@
 # variant-remapping
 Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA format. No chain file is required.
 
-**Method**: creates reads from the flanking sequences of each variant, then maps them to the new assembly using bowtie2.
+**Method**: creates reads from the flanking sequences of each variant, then maps them to the new assembly using 
+bowtie2.
 
 Currently, it only supports SNPs, and not indels.
 
 **Prerequisites:**
-- reverse_strand.py, included (uses pysam, allows reverse strand allele correction (see Note below for further explanation))
+- reverse_strand.py, included (uses pysam, allows reverse strand allele correction (see Note below for further 
+explanation))
 - [vcf2bed](https://bedops.readthedocs.io/en/latest/content/reference/file-management/conversion/vcf2bed.html)
 - [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
 - [samtools](http://www.htslib.org/download/)
@@ -14,7 +16,8 @@ Currently, it only supports SNPs, and not indels.
 - [bcftools](http://www.htslib.org/download/)
 
 **Note about the reverse strand correction:**  
-When a variant is mapped to the reverse strand, the corresponding allele in the output VCF file is reversed, aka converted to the forward strand, as alleles in VCF files are always described on the forward strand. For example:
+When a variant is mapped to the reverse strand, the corresponding allele in the output VCF file is reversed, aka 
+converted to the forward strand, as alleles in VCF files are always described on the forward strand. For example:
 INPUT VCF:
 Old genome: G (ref allele) --> A (variant allele)
 This maps onto the new genome on the reverse strand:
@@ -57,7 +60,8 @@ Command usage: (see Input for details)
 You can use `time` at the beginning of the previous command to get the runtime and CPU time.
 
 **Example command:**
-`time ./remapping_commands.sh -g droso_dm3.fasta -n droso_dm6.fasta -a GCA_000001215.4 -v droso_variants_renamed.vcf -o test.vcf`
+`time ./remapping_commands.sh -g droso_dm3.fasta -n droso_dm6.fasta -a GCA_000001215.4 -v droso_variants_renamed.vcf \
+	-o test.vcf`
 **Output:**
 ```
 -----------------------1) Flanking sequence generation-----------------------
@@ -84,13 +88,3 @@ real	0m1.363s
 user	0m1.091s
 sys	0m0.171s
 ```
-
-## Task list
-- [x] Filter only SNPs
-- [x] Copy VCF header and recreate necessary lines
-- [x] Take into account reverse strand mapping (the REF alleles change)
-- [x] Create a command line version
-- [x] Calculate % of remapped variants
-- [x] If REF=ALT after remapping, the old REF allele is used instead of the new REF, and the alleles are then swapped
-- [ ] Support for indels
-- [ ] Find a way to extract new assembly accession so it's not required as input? or just use new assembly file name?

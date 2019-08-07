@@ -6,7 +6,8 @@
 
 
 #example command:
-#time ./remapping_commands.sh -g droso_dm3.fasta -n GCA_000001215.4_Release_6_plus_ISO1_MT_genomic.fna -a GCA_000001215.4 -v droso_variants_renamed.vcf -o test.vcf
+#time ./remapping_commands.sh -g droso_dm3.fasta -n GCA_000001215.4_Release_6_plus_ISO1_MT_genomic.fna -a 
+#GCA_000001215.4 -v droso_variants_renamed.vcf -o test.vcf
 
 
 oldgenome=''
@@ -52,8 +53,10 @@ bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b 50 > flanking.bed
 bedtools getfasta -fi ../"$oldgenome" -bed flanking.bed -fo variants_reads.fa
 
 #replace the colon separators with "|":
-#storing this information for later on in the script when we split the name by "|" to extract the relevant information (ALT allele, QUAL, FILT, INFO)
-#this is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was chosen
+#storing this information for later on in the script when we split the name by "|" to extract the relevant information 
+#(ALT allele, QUAL, FILT, INFO)
+#this is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
+#chosen
 sed -i 's/:/|/' variants_reads.fa
 
 #store ref bases
@@ -69,9 +72,11 @@ awk '{print $7}' flanking.bed > variant_bases.txt
 awk '{print $5, $8, $9}' flanking.bed > qual_filt_info.txt
 
 #paste the names, variant bases, then fasta sequences into a new file
-paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt <(grep -v '^>' variants_reads.fa) > temp.txt
+paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
+  <(grep -v '^>' variants_reads.fa) > temp.txt
 
-#reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next command is a bit ugly
+#reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
+#command is a bit ugly
 #Input:
 #>[chr]|[pos interval]   [REF]       [ALT]       [rsID]    [QUAL] [FILT] [INFO]      [seq]
 #replace all spaces and tabs with "|":
@@ -110,14 +115,16 @@ bowtie2 -k 1 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > 
 
 
 echo '------------------------------3) Data extraction-----------------------------'
-#extract chromosome, rsID, position on new genome, original variant allele, qual, filter and info fields, also creates old_ref_alleles.txt
+#extract chromosome, rsID, position on new genome, original variant allele, qual, filter and info fields, also creates 
+#old_ref_alleles.txt
 cd "$TMPDIR"
 samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
 samtools index reads_aligned.sorted.bam
 .././reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf
 
 #add interval for variant position in bed format (required by getfasta)
-#reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a bed file
+#reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a 
+#bed file
 #Input: 
 #[chr]	[pos]	[rsID]	[ALT]	[QUAL]	[FILT]	[INFO]
 #Output:
@@ -154,7 +161,8 @@ cat final_header.txt | cat - var_pre_final.vcf > temp && mv temp vcf_out_with_he
 #also add it to the ref alleles file so that the line numbers match:
 cat final_header.txt | cat - old_ref_alleles.txt > temp && mv temp old_ref_alleles_with_header.txt
 
-#test each variant to see if REF = ALT, if so, replace the current REF with the corresponding old REF (this is to deal with variants like G > G)
+#test each variant to see if REF = ALT, if so, replace the current REF with the corresponding old REF (this is to deal 
+#with variants like G > G)
 .././replace_refs.py -i vcf_out_with_header.vcf -r old_ref_alleles_with_header.txt -o pre_final_vcf.vcf
 
 #run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
