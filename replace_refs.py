@@ -8,7 +8,7 @@ description = "replaces the REF allele with the old REF allele if REF = ALT in t
 parser = argparse.ArgumentParser(description = description, formatter_class = RawTextHelpFormatter)
 parser.add_argument("-i", "--vcf", help = "VCF file containing remapped variants")
 parser.add_argument("-r", "--oldrefalleles", help = "file containing the same header as the VCF file + the old " 
-                    "REF alleles in the same order as the VCF")
+"REF alleles in the same order as the VCF")
 parser.add_argument("-o", "--outfile", help = "name of new file")
 args = parser.parse_args()
 
