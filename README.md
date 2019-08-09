@@ -60,12 +60,14 @@ Command usage: (see Input for details)
 You can use `time` at the beginning of the previous command to get the runtime and CPU time.
 
 **Example command:**
-`time ./remapping_commands.sh \
+```
+time ./remapping_commands.sh \
   -g droso_dm3.fasta \
   -n droso_dm6.fasta \
   -a GCA_000001215.4 \
   -v droso_variants_renamed.vcf \
-  -o test.vcf`
+  -o test.vcf
+```
 **Output:**
 ```
 -----------------------1) Flanking sequence generation-----------------------
