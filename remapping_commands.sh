@@ -4,14 +4,16 @@ oldgenome=''
 newgenome=''
 newgenomeaccession=''
 vcffile=''
+flankingseq=''
 outfile=''
 
-while getopts 'g:n:a:v:o:' flag; do
+while getopts 'g:n:a:v:f:o:' flag; do
 	case "${flag}" in
 		g) oldgenome="${OPTARG}";;
 		n) newgenome="${OPTARG}" ;;
 		a) newgenomeaccession="${OPTARG}" ;;
 		v) vcffile="${OPTARG}" ;;
+		f) flankingseq="${OPTARG}" ;;
 		o) outfile="${OPTARG}" ;;
 	esac
 done
@@ -36,37 +38,38 @@ vcf2bed < snps_only.vcf > variants.bed
 # The actual position of the variant is the second coordinate
 
 # Generate the flanking sequence intervals
-bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b 50 > flanking.bed
+bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b "$flankingseq" > flanking.bed
+
+# Check if the intervals are less than the required length (2*flanking length + 1): this filters out reads that aren't 
+# the correct number of bases long (origin: variant too close to the start or end of the chromosome)
+readlength=$(bc <<< "scale=1; ($flankingseq*2)+1")
+awk -v rlength="$readlength" '($3 - $2 == rlength){print $0}' flanking.bed > flanking.filtered.bed
 
 # Get the fasta sequences for these intervals
-bedtools getfasta -fi ../"$oldgenome" -bed flanking.bed -fo variants_reads.fa
-
-# Filter out reads that aren't 101 bases long (origin: variant too close to the start or end of the chromosome)
-awk '($0 ~ ">"){name=$0};($0 !~ ">" && length($0) == 101){print name; print $0}' variants_reads.fa > \
-	variants_read_filtered.fa
+bedtools getfasta -fi ../"$oldgenome" -bed flanking.filtered.bed -fo variants_reads.fa
 
 # Replace the colon separators with "|":
 # Storing this information for later on in the script when we split the name by "|" to extract the relevant 
 # information (ALT allele, QUAL, FILT, INFO)
 # This is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
 # chosen
-sed -i 's/:/|/' variants_read_filtered.fa
+sed -i 's/:/|/' variants_reads.fa
 
 # Store ref bases
-awk '{print $6}' flanking.bed > old_ref_bases.txt
+awk '{print $6}' flanking.filtered.bed > old_ref_bases.txt
 
 # Store rsIDs
-awk '{print $4}' flanking.bed > rsIDs.txt
+awk '{print $4}' flanking.filtered.bed > rsIDs.txt
 
 # Store variant bases
-awk '{print $7}' flanking.bed > variant_bases.txt
+awk '{print $7}' flanking.filtered.bed > variant_bases.txt
 
 # Store the other vcf columns
-awk '{print $5, $8, $9}' flanking.bed > qual_filt_info.txt
+awk '{print $5, $8, $9}' flanking.filtered.bed > qual_filt_info.txt
 
 # Paste the names, variant bases, then fasta sequences into a new file
-paste <(grep '^>' variants_read_filtered.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-  <(grep -v '^>' variants_read_filtered.fa) > temp.txt
+paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
+  <(grep -v '^>' variants_reads.fa) > temp.txt
 
 # Reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
 # command is a bit ugly
@@ -118,7 +121,7 @@ echo '------------------------------3) Data extraction--------------------------
 cd "$TMPDIR"
 samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
 samtools index reads_aligned.sorted.bam
-../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf
+../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f "$flankingseq"
 
 # Add interval for variant position in bed format (required by getfasta)
 # Reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a 

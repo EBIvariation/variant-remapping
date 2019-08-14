@@ -28,13 +28,14 @@ for read in bamfile:
     name = read.query_name
     info = name.split("|")
     nucl = info[3]
+    if read.is_unmapped: # Can be decoded with bitwise flag with & 4 (4 means unmapped)
+        continue # `not(read.is_unmapped)` doesn't work, the unmapped reads still get through, so a continue is needed
     # Mapped onto reverse strand:
     if read.is_reverse: # Can be decoded with bitwise flag with & 16
         nucl = Seq(nucl, generic_dna).complement()
     # Write it all to the file:
-    if not(read.is_unmapped): # Can be decoded with bitwise flag with & 4 (4 means unmapped)
-        outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name, read.pos + int(flanklength) + 1, info[4], nucl, info[5], info[6], info[7]))
-        # Store old reference allele:
-        old_ref_alleles.write("%s\n" % info[2])
+    outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name, read.pos + int(flanklength) + 1, info[4], nucl, info[5], info[6], info[7]))
+    # Store old reference allele:
+    old_ref_alleles.write("%s\n" % info[2])
 outfile.close()
 old_ref_alleles.close()
