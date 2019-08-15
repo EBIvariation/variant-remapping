@@ -19,7 +19,7 @@ args = parser.parse_args()
 bamfile = pysam.AlignmentFile(args.bam, 'rb')
 outfile = open(args.outfile, 'w')
 old_ref_alleles = open(args.old_ref_alleles, 'w')
-flanklength=args.flankingseqlength
+flanklength = args.flankingseqlength
 
 # Reverses the allele for variants that got mapped onto the reverse strand of the new genome, and prints everything 
 # into correct columns
@@ -28,14 +28,51 @@ for read in bamfile:
     name = read.query_name
     info = name.split("|")
     nucl = info[3]
-    if read.is_unmapped: # Can be decoded with bitwise flag with & 4 (4 means unmapped)
-        continue # `not(read.is_unmapped)` doesn't work, the unmapped reads still get through, so a continue is needed
+    if read.is_unmapped:  # Can be decoded with bitwise flag with & 4 (4 means unmapped)
+        continue  # `not(read.is_unmapped)` doesn't work, the unmapped reads still get through, so a continue is needed
+    if read.is_secondary:  # We only want to deal with primary reads
+        continue
     # Mapped onto reverse strand:
-    if read.is_reverse: # Can be decoded with bitwise flag with & 16
+    if read.is_reverse:  # Can be decoded with bitwise flag with & 16
         nucl = Seq(nucl, generic_dna).complement()
-    # Write it all to the file:
-    outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name, read.pos + int(flanklength) + 1, info[4], nucl, info[5], info[6], info[7]))
-    # Store old reference allele:
-    old_ref_alleles.write("%s\n" % info[2])
+    # Getting AS and XS:
+    AS = read.get_tag("AS")
+    try:
+        XS = read.get_tag("XS")  # Some variants don't have secondary alignments, which throws an error
+    except KeyError:
+        XS = -100  # Set an arbitrary low value for the "artificial" secondary alignment 
+
+    # Calculating correct position and filtering based on alignement around the variant position
+    start = read.pos
+    readVarPos = start + int(flanklength) + 1
+    perfCounter = 0  # This counter will count the number of matches + mismatches around the variant position
+    varpos = start  # Store the alignment start position
+    cigList = []  # This list will contain the CIGAR values: 10M will become [0,0,0,0,0,0,0,0,0,0]
+    begin = 0
+    localRegionSize = 5
+    # Create the list:
+    for (cigType, cigLength) in read.cigartuples:
+        for i in range(begin, begin + cigLength):
+            cigList.append(cigType)
+        begin += cigLength
+    for operator in range(0, int(flanklength)+2+localRegionSize):
+        # Stop incrementing varpos once we've reached readVarPos:
+        if start + operator < readVarPos:
+            # Mismatch/matches and deletions increase the position counter:
+            if cigList[operator] == 0 or cigList[operator] == 2: 
+                varpos += 1
+        # If we are in the local region around the variant, but not at the position of the variant:
+        if (start + operator >= (readVarPos - localRegionSize)) \
+        and (start + operator <= (readVarPos + localRegionSize)) \
+        and (start + operator != (readVarPos)):
+            if cigList[operator] == 0:  # Match or mismatch
+                perfCounter += 1  # Increase the counter for perfect local region
+    # Filter out AS's that are too low and XS's that are too close to AS, and those with a non-perfect local alignment:
+    if (AS > -200) and (AS - XS >= 20) and (perfCounter == 2*localRegionSize):
+        # Write it all to the file:
+        outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,  varpos, info[4], nucl, info[5], info[6],\
+                                                        info[7]))
+        # Store old reference allele:
+        old_ref_alleles.write("%s\n" % info[2])
 outfile.close()
 old_ref_alleles.close()

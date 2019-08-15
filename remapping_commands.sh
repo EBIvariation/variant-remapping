@@ -97,6 +97,7 @@ echo "#### Mapping results: ####"
 
 # Bowtie2 arguments:
 # -k 1 means that bowtie2 will only report the best alignment for each variant (default behaviour)
+# -k 2 means that bowtie2 will report the best alignment and the second best
 # -f specifies that the reads are in fasta format
 # -x [index] is the prefix of the index files
 
@@ -104,7 +105,7 @@ echo "#### Mapping results: ####"
 # -b: output in BAM format
 # -S: used to specifiy input is SAM format, but only in older versions of samtools
 
-bowtie2 -k 1 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
+bowtie2 -k 2 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
 
 # Example output:
 # >1094 reads; of these:
