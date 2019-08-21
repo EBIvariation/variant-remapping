@@ -2,20 +2,20 @@
 
 oldgenome=''
 newgenome=''
-newgenomeaccession=''
 vcffile=''
 flankingseq=''
 scorecutoff=''
+diffcutoff=''
 outfile=''
 
-while getopts 'g:n:a:v:f:s:o:' flag; do
+while getopts 'g:n:v:f:s:d:o:' flag; do
 	case "${flag}" in
 		g) oldgenome="${OPTARG}";;
 		n) newgenome="${OPTARG}" ;;
-		a) newgenomeaccession="${OPTARG}" ;;
 		v) vcffile="${OPTARG}" ;;
 		f) flankingseq="${OPTARG}" ;;
 		s) scorecutoff="${OPTARG}" ;;
+		d) diffcutoff="${OPTARG}" ;;
 		o) outfile="${OPTARG}" ;;
 	esac
 done
@@ -30,18 +30,19 @@ cut -f1,2 ../"$oldgenome".fai > "$oldgenome".chrom.sizes
 # Filter SNPs only
 bcftools filter -i 'TYPE="snp"' ../"$vcffile" -o snps_only.vcf
 
-# Unnecessary if input file is already SNP-filtered and uniq'ed, but leaving it in as it doesn't change anything:
+# Unnecessary if input file is already SNP-filtered and uniq'ed, uncomment if needed: 
+# (also change the snps_only to snps_only.uniq)
 # Get unique variants based on rsIDs (column 3)
-grep '^#' snps_only.vcf > snps_only.uniq.vcf
-grep -v '^#' snps_only.vcf | sort -u -k3,3  >> snps_only.uniq.vcf
+#grep '^#' snps_only.vcf > snps_only.uniq.vcf
+#grep -v '^#' snps_only.vcf | sort -u -k3,3  >> snps_only.uniq.vcf
 
 # Store header
-bgzip snps_only.uniq.vcf
-bcftools view --header-only snps_only.uniq.vcf.gz -o vcf_header.txt
+bgzip snps_only.vcf
+bcftools view --header-only snps_only.vcf.gz -o vcf_header.txt
 
 # Convert vcf to bed:
-gzip -d snps_only.uniq.vcf.gz
-vcf2bed < snps_only.uniq.vcf > variants.bed
+gzip -d snps_only.vcf.gz
+vcf2bed < snps_only.vcf > variants.bed
 # The actual position of the variant is the second coordinate
 
 # Generate the flanking sequence intervals
@@ -95,7 +96,6 @@ paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.t
 # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]
 # [seq]
 sed 's/\t/|/g; s/ /|/g; s/\(.*\)|/\1 /' temp.txt | tr ' ' '\n' > variant_reads.out.fa
-#total=$(grep "^[^>]" variant_reads.out.fa | wc -l)
 
 echo "---------------------------2) Mapping with bowtie2---------------------------"
 # "index" is the prefix of the output filenames, not a directory
@@ -135,8 +135,8 @@ cd "$TMPDIR"
 samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
 samtools index reads_aligned.sorted.bam
 ../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f "$flankingseq"\
- -s "$scorecutoff"
-shortPerc=$(echo "result = ($shortCount/$total)*100; scale=3; result/1" | bc -l)
+ -s "$scorecutoff" -d "$diffcutoff" 
+shortPerc=$(echo "result = ($shortCount/$total)*100; scale=2; result/1" | bc -l)
 echo "Of the input variants, $shortPerc% were too close to chromosome edges"
 
 # Add interval for variant position in bed format (required by getfasta)
@@ -164,7 +164,7 @@ awk '{print $1}' var_pre_final.vcf | sort | uniq > contig_names.txt
 while read CHR; do echo "##contig=<ID=$CHR>"; done < contig_names.txt > contigs.txt
 
 # Add the reference assembly
-echo "##reference=$newgenomeaccession" >> contigs.txt
+echo "##reference=$newgenome" >> contigs.txt
 
 # Copy everything that isn't #CHROM (the column titles), ##contig or ##reference from the old header to a temp
 awk '($1 !~ /^##contig/ && $1 !~ /^##reference/ && $1 !~ /^#CHROM/) {print $0}' vcf_header.txt > temp_header.txt

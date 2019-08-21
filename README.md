@@ -42,6 +42,7 @@ variant of this new reference genome.
 - Variants file (VCF format): contains the list of variants you want to remap.
 - The length of the flanking sequences that generate the reads.
 - Percentage of the flanking sequences that should be used as Alignment Score cut-off threshold.
+- Percentage of the flanking sequences that should be used as AS-XS difference cut-off threshold.
 
 ## Output
 A VCF file containing:
@@ -75,6 +76,7 @@ Command usage: (see Input for details)
   -v [vcf file] \
   -f [flanking sequence length] \
   -s [score percentage cut-off] \
+  -d [AS-XS difference percentage cut-off] \
   -o [outfile name]
 ```
 
@@ -82,7 +84,10 @@ You can use `time` at the beginning of the previous command to get the runtime a
 
 **Example:**
 "I want to remap the variants in `droso_variants_renamed.vcf` from `droso_dm3.fasta` to `droso_dm6.fasta` (its 
-accession is: `GCA_000001215.4`), with flanking sequences of 50 bases, which will create 101-base reads. The alignment score cut-off will be -(50 x 0.6) = -30, meaning that reads with alignment scores lower than -30 will not be kept. The remapped variants will be in `test.vcf`."  
+accession is: `GCA_000001215.4`), with flanking sequences of 50 bases, which will create 101-base reads. The alignment 
+score cut-off will be -(50 x 0.6) = -30, meaning that reads with alignment scores lower than -30 will not be kept. The 
+AS-XS difference threshold will be 0.04, meaning that AS-XS with a difference of less than 50 * 0.04 = 2 will not be 
+kept. The remapped variants will be in `test.vcf`."  
 
 **Command:**
 ```
