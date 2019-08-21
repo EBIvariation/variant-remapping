@@ -13,6 +13,8 @@ parser.add_argument("-i", "--bam", help = "bam file containing remapped variants
 parser.add_argument("-o", "--outfile", help = "name of new file")
 parser.add_argument("-p", "--old_ref_alleles", help = "name of output old ref alleles")
 parser.add_argument("-f", "--flankingseqlength", help="length of each of the flanking sequences")
+parser.add_argument("-s", "--scoreperc", help="the alignment score cut off percentage of flanking seq length (keeps "
+"values strictly above)")
 args = parser.parse_args()
 
 
@@ -20,6 +22,15 @@ bamfile = pysam.AlignmentFile(args.bam, 'rb')
 outfile = open(args.outfile, 'w')
 old_ref_alleles = open(args.old_ref_alleles, 'w')
 flanklength = args.flankingseqlength
+scoreperc = args.scoreperc
+# Calculate the score cutoff based on flanking seq length: 
+scorecutoff = -(int(flanklength)*float(scoreperc))
+unmappedCount = 0
+primaryPoorCount = 0
+gapSmallCount = 0
+contextBadCount = 0
+totalCount = 0
+remappedCount = 0
 
 # Reverses the allele for variants that got mapped onto the reverse strand of the new genome, and prints everything 
 # into correct columns
@@ -29,9 +40,12 @@ for read in bamfile:
     info = name.split("|")
     nucl = info[3]
     if read.is_unmapped:  # Can be decoded with bitwise flag with & 4 (4 means unmapped)
+        unmappedCount += 1
+        totalCount += 1
         continue  # `not(read.is_unmapped)` doesn't work, the unmapped reads still get through, so a continue is needed
     if read.is_secondary:  # We only want to deal with primary reads
         continue
+    totalCount += 1
     # Mapped onto reverse strand:
     if read.is_reverse:  # Can be decoded with bitwise flag with & 16
         nucl = Seq(nucl, generic_dna).complement()
@@ -40,7 +54,7 @@ for read in bamfile:
     try:
         XS = read.get_tag("XS")  # Some variants don't have secondary alignments, which throws an error
     except KeyError:
-        XS = -100  # Set an arbitrary low value for the "artificial" secondary alignment 
+        XS = -int(flanklength) # Set an arbitrary low value for the "artificial" secondary alignment 
 
     # Calculating correct position and filtering based on alignement around the variant position
     start = read.pos
@@ -67,8 +81,15 @@ for read in bamfile:
         and (start + operator != (readVarPos)):
             if cigList[operator] == 0:  # Match or mismatch
                 perfCounter += 1  # Increase the counter for perfect local region
+    if (AS <= int(scorecutoff)):
+        primaryPoorCount += 1
+    elif (AS - XS < 20):
+        gapSmallCount += 1
+    elif (perfCounter != 2*localRegionSize):
+        contextBadCount += 1
     # Filter out AS's that are too low and XS's that are too close to AS, and those with a non-perfect local alignment:
-    if (AS > -200) and (AS - XS >= 20) and (perfCounter == 2*localRegionSize):
+    if (AS > int(scorecutoff)) and (AS - XS >= 20) and (perfCounter == 2*localRegionSize):
+        remappedCount += 1
         # Write it all to the file:
         outfile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name,  varpos, info[4], nucl, info[5], info[6],\
                                                         info[7]))
@@ -76,3 +97,14 @@ for read in bamfile:
         old_ref_alleles.write("%s\n" % info[2])
 outfile.close()
 old_ref_alleles.close()
+print(totalCount)
+print(unmappedCount)
+print(primaryPoorCount)
+print(gapSmallCount)
+print(contextBadCount)
+print(remappedCount)
+print("% of variants rejected for:")
+print("Unmapped:", round(((unmappedCount/totalCount)*100),3), "%")
+print("Primary alignment too poor:", round(((primaryPoorCount/totalCount)*100), 3), "%")
+print("Primary and secondary alignments too close:", round(((gapSmallCount/totalCount)*100), 3), "%")
+print("Local region around variant too poorly aligned:", round(((contextBadCount/totalCount)*100), 3), "%")

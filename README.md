@@ -7,8 +7,8 @@ bowtie2.
 Currently, it only supports SNPs, and not indels.
 
 **Prerequisites:**
-- `reverse_strand.py`, included (uses [pysam](https://pysam.readthedocs.io/en/latest/api.html), allows reverse strand allele correction (see Note below for further 
-explanation))
+- `reverse_strand.py`, included (uses [pysam](https://pysam.readthedocs.io/en/latest/api.html), allows reverse strand 
+allele correction (see Note below for further explanation), and filtering based on bowtie2's alignment score)
 - `replace_refs.py`, included (uses old REF allele in the case of new REF=ALT, these then get swapped (see Note 2))
 - [vcf2bed](https://bedops.readthedocs.io/en/latest/content/reference/file-management/conversion/vcf2bed.html)
 - [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
@@ -40,8 +40,8 @@ variant of this new reference genome.
 - Old genome assembly file (FASTA format): the genome you have variants for.
 - New genome assembly file (FASTA format): the genome you want to remap the variants to.
 - Variants file (VCF format): contains the list of variants you want to remap.
-- Accession name for the new assembly: required to recreate the header for the output VCF file.
 - The length of the flanking sequences that generate the reads.
+- Percentage of the flanking sequences that should be used as Alignment Score cut-off threshold.
 
 ## Output
 A VCF file containing:
@@ -72,9 +72,9 @@ Command usage: (see Input for details)
 ./remapping_commands.sh \
   -g [old genome] \
   -n [new genome] \
-  -a [new genome accession] \
   -v [vcf file] \
   -f [flanking sequence length] \
+  -s [score percentage cut-off] \
   -o [outfile name]
 ```
 
@@ -82,16 +82,16 @@ You can use `time` at the beginning of the previous command to get the runtime a
 
 **Example:**
 "I want to remap the variants in `droso_variants_renamed.vcf` from `droso_dm3.fasta` to `droso_dm6.fasta` (its 
-accession is: `GCA_000001215.4`), with flanking sequences of 50 bases, which will create 101-base reads. The remapped variants will be in `test.vcf`."  
+accession is: `GCA_000001215.4`), with flanking sequences of 50 bases, which will create 101-base reads. The alignment score cut-off will be -(50 x 0.6) = -30, meaning that reads with alignment scores lower than -30 will not be kept. The remapped variants will be in `test.vcf`."  
 
 **Command:**
 ```
 time ./remapping_commands.sh \
   -g droso_dm3.fasta \
   -n droso_dm6.fasta \
-  -a GCA_000001215.4 \
   -v droso_variants_renamed.vcf \
   -f 50 \
+  -s 0.6 \
   -o test.vcf
 ```
 **Output:**

@@ -5,15 +5,17 @@ newgenome=''
 newgenomeaccession=''
 vcffile=''
 flankingseq=''
+scorecutoff=''
 outfile=''
 
-while getopts 'g:n:a:v:f:o:' flag; do
+while getopts 'g:n:a:v:f:s:o:' flag; do
 	case "${flag}" in
 		g) oldgenome="${OPTARG}";;
 		n) newgenome="${OPTARG}" ;;
 		a) newgenomeaccession="${OPTARG}" ;;
 		v) vcffile="${OPTARG}" ;;
 		f) flankingseq="${OPTARG}" ;;
+		s) scorecutoff="${OPTARG}" ;;
 		o) outfile="${OPTARG}" ;;
 	esac
 done
@@ -28,13 +30,18 @@ cut -f1,2 ../"$oldgenome".fai > "$oldgenome".chrom.sizes
 # Filter SNPs only
 bcftools filter -i 'TYPE="snp"' ../"$vcffile" -o snps_only.vcf
 
+# Unnecessary if input file is already SNP-filtered and uniq'ed, but leaving it in as it doesn't change anything:
+# Get unique variants based on rsIDs (column 3)
+grep '^#' snps_only.vcf > snps_only.uniq.vcf
+grep -v '^#' snps_only.vcf | sort -u -k3,3  >> snps_only.uniq.vcf
+
 # Store header
-bgzip snps_only.vcf
-bcftools view --header-only snps_only.vcf.gz -o vcf_header.txt
+bgzip snps_only.uniq.vcf
+bcftools view --header-only snps_only.uniq.vcf.gz -o vcf_header.txt
 
 # Convert vcf to bed:
-gzip -d snps_only.vcf.gz
-vcf2bed < snps_only.vcf > variants.bed
+gzip -d snps_only.uniq.vcf.gz
+vcf2bed < snps_only.uniq.vcf > variants.bed
 # The actual position of the variant is the second coordinate
 
 # Generate the flanking sequence intervals
@@ -44,6 +51,10 @@ bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b "$flankingseq" > fl
 # the correct number of bases long (origin: variant too close to the start or end of the chromosome)
 readlength=$(bc <<< "scale=1; ($flankingseq*2)+1")
 awk -v rlength="$readlength" '($3 - $2 == rlength){print $0}' flanking.bed > flanking.filtered.bed
+# Count the number of variants filtered out because they were too close to the edge of the chromosome:
+total=$(cat flanking.bed | wc -l)
+aft=$(cat flanking.filtered.bed | wc -l)
+shortCount=$(bc <<< "scale=1; $total-$aft")
 
 # Get the fasta sequences for these intervals
 bedtools getfasta -fi ../"$oldgenome" -bed flanking.filtered.bed -fo variants_reads.fa
@@ -84,7 +95,7 @@ paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.t
 # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]
 # [seq]
 sed 's/\t/|/g; s/ /|/g; s/\(.*\)|/\1 /' temp.txt | tr ' ' '\n' > variant_reads.out.fa
-
+#total=$(grep "^[^>]" variant_reads.out.fa | wc -l)
 
 echo "---------------------------2) Mapping with bowtie2---------------------------"
 # "index" is the prefix of the output filenames, not a directory
@@ -100,12 +111,13 @@ echo "#### Mapping results: ####"
 # -k 2 means that bowtie2 will report the best alignment and the second best
 # -f specifies that the reads are in fasta format
 # -x [index] is the prefix of the index files
+# --np <int> sets the penalty for Ns (default = 1)
 
 # Samtools view arguments:
 # -b: output in BAM format
 # -S: used to specifiy input is SAM format, but only in older versions of samtools
 
-bowtie2 -k 2 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
+bowtie2 -k 2 --np 0 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
 
 # Example output:
 # >1094 reads; of these:
@@ -122,7 +134,10 @@ echo '------------------------------3) Data extraction--------------------------
 cd "$TMPDIR"
 samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
 samtools index reads_aligned.sorted.bam
-../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f "$flankingseq"
+../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f "$flankingseq"\
+ -s "$scorecutoff"
+shortPerc=$(echo "result = ($shortCount/$total)*100; scale=3; result/1" | bc -l)
+echo "Of the input variants, $shortPerc% were too close to chromosome edges"
 
 # Add interval for variant position in bed format (required by getfasta)
 # Reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a 
@@ -180,14 +195,13 @@ cd "$TMPDIR"
 echo "-----------------------------------Results-----------------------------------"
 echo "Total number of input variants:"
 grep "^[^#]" ../"$vcffile" | wc -l
-echo "Total number of variants processed (after filters):"
-total=$(grep "^[^>]" variant_reads.out.fa | wc -l)
-echo $total
+echo "Total number of variants processed (after SNP and edge chromosome filters):"
+echo $aft
 echo "Number of remapped variants:"
 remapped=$(grep "^[^#]" ../"$outfile" | wc -l)
 echo $remapped
 echo "Percentage of remapped variants:"
-percentage=$(bc <<< "scale=3;($remapped/$total)*100")
+percentage=$(echo "result = ($remapped/$aft)*100; scale=3; result/1" | bc -l)
 echo $percentage"%"
 
 cd -
