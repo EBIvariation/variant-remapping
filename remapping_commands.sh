@@ -2,16 +2,20 @@
 
 oldgenome=''
 newgenome=''
-newgenomeaccession=''
 vcffile=''
+flankingseq=''
+scorecutoff=''
+diffcutoff=''
 outfile=''
 
-while getopts 'g:n:a:v:o:' flag; do
+while getopts 'g:n:v:f:s:d:o:' flag; do
 	case "${flag}" in
 		g) oldgenome="${OPTARG}";;
 		n) newgenome="${OPTARG}" ;;
-		a) newgenomeaccession="${OPTARG}" ;;
 		v) vcffile="${OPTARG}" ;;
+		f) flankingseq="${OPTARG}" ;;
+		s) scorecutoff="${OPTARG}" ;;
+		d) diffcutoff="${OPTARG}" ;;
 		o) outfile="${OPTARG}" ;;
 	esac
 done
@@ -26,6 +30,12 @@ cut -f1,2 ../"$oldgenome".fai > "$oldgenome".chrom.sizes
 # Filter SNPs only
 bcftools filter -i 'TYPE="snp"' ../"$vcffile" -o snps_only.vcf
 
+# Unnecessary if input file is already SNP-filtered and uniq'ed, uncomment if needed: 
+# (also change the snps_only to snps_only.uniq)
+# Get unique variants based on rsIDs (column 3)
+#grep '^#' snps_only.vcf > snps_only.uniq.vcf
+#grep -v '^#' snps_only.vcf | sort -u -k3,3  >> snps_only.uniq.vcf
+
 # Store header
 bgzip snps_only.vcf
 bcftools view --header-only snps_only.vcf.gz -o vcf_header.txt
@@ -36,37 +46,42 @@ vcf2bed < snps_only.vcf > variants.bed
 # The actual position of the variant is the second coordinate
 
 # Generate the flanking sequence intervals
-bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b 50 > flanking.bed
+bedtools slop -i variants.bed -g "$oldgenome".chrom.sizes -b "$flankingseq" > flanking.bed
+
+# Check if the intervals are less than the required length (2*flanking length + 1): this filters out reads that aren't 
+# the correct number of bases long (origin: variant too close to the start or end of the chromosome)
+readlength=$(bc <<< "scale=1; ($flankingseq*2)+1")
+awk -v rlength="$readlength" '($3 - $2 == rlength){print $0}' flanking.bed > flanking.filtered.bed
+# Count the number of variants filtered out because they were too close to the edge of the chromosome:
+total=$(cat flanking.bed | wc -l)
+aft=$(cat flanking.filtered.bed | wc -l)
+shortCount=$(bc <<< "scale=1; $total-$aft")
 
 # Get the fasta sequences for these intervals
-bedtools getfasta -fi ../"$oldgenome" -bed flanking.bed -fo variants_reads.fa
-
-# Filter out reads that aren't 101 bases long (origin: variant too close to the start or end of the chromosome)
-awk '($0 ~ ">"){name=$0};($0 !~ ">" && length($0) == 101){print name; print $0}' variants_reads.fa > \
-	variants_read_filtered.fa
+bedtools getfasta -fi ../"$oldgenome" -bed flanking.filtered.bed -fo variants_reads.fa
 
 # Replace the colon separators with "|":
 # Storing this information for later on in the script when we split the name by "|" to extract the relevant 
 # information (ALT allele, QUAL, FILT, INFO)
 # This is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
 # chosen
-sed -i 's/:/|/' variants_read_filtered.fa
+sed -i 's/:/|/' variants_reads.fa
 
 # Store ref bases
-awk '{print $6}' flanking.bed > old_ref_bases.txt
+awk '{print $6}' flanking.filtered.bed > old_ref_bases.txt
 
 # Store rsIDs
-awk '{print $4}' flanking.bed > rsIDs.txt
+awk '{print $4}' flanking.filtered.bed > rsIDs.txt
 
 # Store variant bases
-awk '{print $7}' flanking.bed > variant_bases.txt
+awk '{print $7}' flanking.filtered.bed > variant_bases.txt
 
 # Store the other vcf columns
-awk '{print $5, $8, $9}' flanking.bed > qual_filt_info.txt
+awk '{print $5, $8, $9}' flanking.filtered.bed > qual_filt_info.txt
 
 # Paste the names, variant bases, then fasta sequences into a new file
-paste <(grep '^>' variants_read_filtered.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-  <(grep -v '^>' variants_read_filtered.fa) > temp.txt
+paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
+  <(grep -v '^>' variants_reads.fa) > temp.txt
 
 # Reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
 # command is a bit ugly
@@ -82,7 +97,6 @@ paste <(grep '^>' variants_read_filtered.fa) old_ref_bases.txt variant_bases.txt
 # [seq]
 sed 's/\t/|/g; s/ /|/g; s/\(.*\)|/\1 /' temp.txt | tr ' ' '\n' > variant_reads.out.fa
 
-
 echo "---------------------------2) Mapping with bowtie2---------------------------"
 # "index" is the prefix of the output filenames, not a directory
 echo "#### Building index: may take a while ####"
@@ -94,14 +108,16 @@ echo "#### Mapping results: ####"
 
 # Bowtie2 arguments:
 # -k 1 means that bowtie2 will only report the best alignment for each variant (default behaviour)
+# -k 2 means that bowtie2 will report the best alignment and the second best
 # -f specifies that the reads are in fasta format
 # -x [index] is the prefix of the index files
+# --np <int> sets the penalty for Ns (default = 1)
 
 # Samtools view arguments:
 # -b: output in BAM format
 # -S: used to specifiy input is SAM format, but only in older versions of samtools
 
-bowtie2 -k 1 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
+bowtie2 -k 2 --np 0 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
 
 # Example output:
 # >1094 reads; of these:
@@ -118,7 +134,10 @@ echo '------------------------------3) Data extraction--------------------------
 cd "$TMPDIR"
 samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
 samtools index reads_aligned.sorted.bam
-../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf
+../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f "$flankingseq"\
+ -s "$scorecutoff" -d "$diffcutoff" 
+shortPerc=$(echo "result = ($shortCount/$total)*100; scale=2; result/1" | bc -l)
+echo "Of the input variants, $shortPerc% were too close to chromosome edges"
 
 # Add interval for variant position in bed format (required by getfasta)
 # Reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a 
@@ -145,7 +164,7 @@ awk '{print $1}' var_pre_final.vcf | sort | uniq > contig_names.txt
 while read CHR; do echo "##contig=<ID=$CHR>"; done < contig_names.txt > contigs.txt
 
 # Add the reference assembly
-echo "##reference=$newgenomeaccession" >> contigs.txt
+echo "##reference=$newgenome" >> contigs.txt
 
 # Copy everything that isn't #CHROM (the column titles), ##contig or ##reference from the old header to a temp
 awk '($1 !~ /^##contig/ && $1 !~ /^##reference/ && $1 !~ /^#CHROM/) {print $0}' vcf_header.txt > temp_header.txt
@@ -176,14 +195,13 @@ cd "$TMPDIR"
 echo "-----------------------------------Results-----------------------------------"
 echo "Total number of input variants:"
 grep "^[^#]" ../"$vcffile" | wc -l
-echo "Total number of variants processed (after filters):"
-total=$(grep "^[^>]" variant_reads.out.fa | wc -l)
-echo $total
+echo "Total number of variants processed (after SNP and edge chromosome filters):"
+echo $aft
 echo "Number of remapped variants:"
 remapped=$(grep "^[^#]" ../"$outfile" | wc -l)
 echo $remapped
 echo "Percentage of remapped variants:"
-percentage=$(bc <<< "scale=3;($remapped/$total)*100")
+percentage=$(echo "result = ($remapped/$aft)*100; scale=3; result/1" | bc -l)
 echo $percentage"%"
 
 cd -
