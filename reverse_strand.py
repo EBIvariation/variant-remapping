@@ -12,10 +12,9 @@ parser = argparse.ArgumentParser(description = description, formatter_class = Ra
 parser.add_argument("-i", "--bam", help = "bam file containing remapped variants ")
 parser.add_argument("-o", "--outfile", help = "name of new file")
 parser.add_argument("-p", "--old_ref_alleles", help = "name of output old ref alleles")
-parser.add_argument("-f", "--flankingseqlength", help="length of each of the flanking sequences")
-parser.add_argument("-s", "--scoreperc", help="the alignment score cut off percentage of flanking seq length (keeps "
-                    "values strictly above)")
-parser.add_argument("-d", "--difference_AS_XS", help="difference threshold percentage between AS and XS")
+parser.add_argument("-f", "--flankingseqlength", type = int, help = "length of each of the flanking sequences")
+parser.add_argument("-s", "--scoreperc", type = float, help = "the alignment score cut off percentage of flanking seq" "length (keeps values strictly above)")
+parser.add_argument("-d", "--difference_AS_XS", type = float, help = "difference threshold % between AS and XS")
 
 args = parser.parse_args()
 
@@ -27,8 +26,8 @@ flank_length = args.flankingseqlength
 score_perc = args.scoreperc
 diff_AS_XS_perc = args.difference_AS_XS
 # Calculate the score cutoff based on flanking seq length: 
-score_cutoff = -(int(flank_length)*float(score_perc))
-diff_cutoff = int(flank_length)*float(diff_AS_XS_perc)
+score_cutoff = -(flank_length*score_perc)
+diff_cutoff = flank_length*diff_AS_XS_perc
 unmapped_count = 0
 primary_poor_count = 0
 gap_small_count = 0
@@ -58,11 +57,10 @@ for read in bamfile:
     try:
         XS = read.get_tag("XS")  # Some variants don't have secondary alignments, which throws an error
     except KeyError:
-        XS = -int(flank_length)  # Set an arbitrary low value for the "artificial" secondary alignment 
+        XS = -flank_length  # Set an arbitrary low value for the "artificial" secondary alignment 
 
     # Calculating correct position and filtering based on alignement around the variant position
     start = read.pos
-    read_var_pos = start + int(flank_length) + 1
     perf_counter = 0  # This counter will count the number of matches + mismatches around the variant position
     varpos = start  # Store the alignment start position
     cig_list = []  # This list will contain the CIGAR values: 10M will become [0,0,0,0,0,0,0,0,0,0]
@@ -73,7 +71,9 @@ for read in bamfile:
         for i in range(begin, begin + cig_length):
             cig_list.append(cig_type)
         begin += cig_length
-    for operator in range(0, int(flank_length)+2+local_region_size):
+    # Deletions need to be counted in the new variant position:
+    read_var_pos = start + flank_length + 1 + cig_list.count(pysam.CDEL)
+    for operator in range(0, flank_length + 2 + local_region_size + cig_list.count(pysam.CDEL)):
         # Stop incrementing varpos once we've reached read_var_pos:
         if start + operator < read_var_pos:
             # Mismatch/matches and deletions increase the position counter:
