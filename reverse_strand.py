@@ -62,7 +62,6 @@ for read in bamfile:
 
     # Calculating correct position and filtering based on alignement around the variant position
     start = read.pos
-    read_var_pos = start + int(flank_length) + 1
     perf_counter = 0  # This counter will count the number of matches + mismatches around the variant position
     varpos = start  # Store the alignment start position
     cig_list = []  # This list will contain the CIGAR values: 10M will become [0,0,0,0,0,0,0,0,0,0]
@@ -73,7 +72,9 @@ for read in bamfile:
         for i in range(begin, begin + cig_length):
             cig_list.append(cig_type)
         begin += cig_length
-    for operator in range(0, int(flank_length)+2+local_region_size):
+    # Deletions need to be counted in the new variant position:
+    read_var_pos = start + int(flank_length) + 1 + cig_list.count(pysam.CDEL)
+    for operator in range(0, int(flank_length) + 2 + local_region_size + cig_list.count(pysam.CDEL)):
         # Stop incrementing varpos once we've reached read_var_pos:
         if start + operator < read_var_pos:
             # Mismatch/matches and deletions increase the position counter:
