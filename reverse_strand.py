@@ -72,8 +72,8 @@ for read in bamfile:
             cig_list.append(cig_type)
         begin += cig_length
     # Deletions need to be counted in the new variant position:
-    read_var_pos = start + flank_length + 1 + cig_list.count(pysam.CDEL)
-    for operator in range(0, flank_length + 2 + local_region_size + cig_list.count(pysam.CDEL)):
+    read_var_pos = start + flank_length + 1 + cig_list[0:flank_length+1].count(pysam.CDEL)
+    for operator in range(0, flank_length + 2 + local_region_size + cig_list[0:flank_length+1].count(pysam.CDEL)):
         # Stop incrementing varpos once we've reached read_var_pos:
         if start + operator < read_var_pos:
             # Mismatch/matches and deletions increase the position counter:
