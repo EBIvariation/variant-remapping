@@ -11,10 +11,8 @@ We then compare the remapped and standard dataset using using [hap.py](https://g
 
 Set `$GIAB_VAR` to points to the directory where the variants will be stored
 
-<Warning>
-This can be skipped if the datasets have been prepared before.
-</Warning>
-
+|:warning: This can be skipped if the datasets have been prepared before.|
+|---|
 The variant remapping pipeline was run for on two variant datasets that were download from GiaB website. 
 The variant data is here:
 
@@ -54,19 +52,16 @@ wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh38/HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel_noCENorHET7.bed
 ```
 
-<Warning>
-GRCh38 is not annotated -> Need to annotate it with dbsnp data
-</Warning>
+|:warning: GRCh38 is not annotated -> Need to annotate it with dbsnp data|
+|---|
 
 Download dbSNPs vcf to get rsids
 ```
 wget ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606/VCF/common_all_20180418.vcf.gz
 ```
 
-<Warning>
-dbSNP chromosome name are 1, 2, 3, ... where hs37d5 is chr1, chr2, chr3 ... 
-We'll prefix all chromosome name with chr
-</Warning>
+|:warning: dbSNP chromosome name are 1, 2, 3, ... where hs37d5 is chr1, chr2, chr3 ...  <br> We'll prefix all chromosome name with chr|
+|---|
 
 ```bash
 zcat common_all_20180418.vcf.gz | awk '{if (/^#/){print } else{print "chr"$0}}' | bgzip -c > common_all_20180418_with_chr.vcf.gz
@@ -77,10 +72,8 @@ bcftools annotate -a common_all_20180418_with_chr.vcf.gz -c ID HG001_GRCh38_GIAB
 ```
 
 
-<Warning>
-Hap.py comapre the variants and the genotype provided however the remapping currently does carry over the genotypes.
-This means that the genotypes needs to be mocked in both the remapped and the standard datasets.
-</Warning>
+|:warning: Hap.py comapre the variants and the genotype provided however the remapping currently does carry over the genotypes.<br>This means that the genotypes needs to be mocked in both the remapped and the standard datasets.|
+|---|
 
 ```bash
 cd ${GIAB_VAR}
