@@ -13,6 +13,7 @@ Set `$GIAB_VAR` to points to the directory where the variants will be stored
 
 |:warning: This can be skipped if the datasets have been prepared before.|
 |---|
+
 The variant remapping pipeline was run for on two variant datasets that were download from GiaB website. 
 The variant data is here:
 
@@ -60,19 +61,18 @@ Download dbSNPs vcf to get rsids
 wget ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606/VCF/common_all_20180418.vcf.gz
 ```
 
-|:warning: dbSNP chromosome name are 1, 2, 3, ... where hs37d5 is chr1, chr2, chr3 ...  <br> We'll prefix all chromosome name with chr|
+|:warning: dbSNP chromosome name are 1, 2, 3, ... where hs37d5 is chr1, chr2, chr3 ...  We'll prefix all chromosome name with chr|
 |---|
 
 ```bash
 zcat common_all_20180418.vcf.gz | awk '{if (/^#/){print } else{print "chr"$0}}' | bgzip -c > common_all_20180418_with_chr.vcf.gz
 ```
 
-```
+```bash 
 bcftools annotate -a common_all_20180418_with_chr.vcf.gz -c ID HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz | bgzip -c > HG001_GRCh38_annotated.vcf.gz
 ```
 
-
-|:warning: Hap.py comapre the variants and the genotype provided however the remapping currently does carry over the genotypes.<br>This means that the genotypes needs to be mocked in both the remapped and the standard datasets.|
+|:warning: Hap.py comapre the variants and the genotype provided. However the remapping currently does not carry over the genotypes. This means that the genotypes needs to be mocked in both the remapped and the standard datasets to allow the variants to be compares accurately|
 |---|
 
 ```bash
