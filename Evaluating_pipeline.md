@@ -7,9 +7,17 @@ We first filter the gold standard to keep only variants that are present in both
 
 We then compare the remapped and standard dataset using using [hap.py](https://github.com/Illumina/hap.py)
 
+## Prerequisite and Environment variables
+`GIAB_DIR`: directory where the gold standard variants are stored
+`REMAPPING_DIR`: directory where the output of the remapping pipeline is stored
+`GENOME_DIR`: directory where the reference genomes are stored
+`SINGULARITY_DIR`: directory where the singularity images are stored
+
+Some software required by the remapping pipeline are also assumed to be installed and in the `PATH`
+
 ## Preparing GiaB datasets 
 
-Set `$GIAB_VAR` to points to the directory where the variants will be stored
+Set `GIAB_DIR` to points to the directory where the variants will be stored
 
 |:warning: This can be skipped if the datasets have been prepared before.|
 |---|
@@ -32,22 +40,22 @@ ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/s
 Prepare directory structure
 
 ```bash
-mkdir -p ${GIAB_VAR}/NA12878/GRCh37
-mkdir -p ${GIAB_VAR}NA12878/GRCh38
+mkdir -p ${GIAB_DIR}/NA12878/GRCh37
+mkdir -p ${GIAB_DIR}NA12878/GRCh38
 ```
 
 Download the variant datasets 
 
 
 ```bash
-cd ${GIAB_VAR}/NA12878/GRCh37
+cd ${GIAB_DIR}/NA12878/GRCh37
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz.tbi
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel.bed
 ```
 
 ```bash
-cd ${GIAB_VAR}/NA12878/GRCh38
+cd ${GIAB_DIR}/NA12878/GRCh38
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh38/HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh38/HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz.tbi
 wget ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/GRCh38/HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel_noCENorHET7.bed
@@ -76,7 +84,7 @@ bcftools annotate -a common_all_20180418_with_chr.vcf.gz -c ID HG001_GRCh38_GIAB
 |---|
 
 ```bash
-cd ${GIAB_VAR}
+cd ${GIAB_DIR}
 gunzip -c  NA12878/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz   \
    | awk 'BEGIN{OFS="\t"} {if  (/^#/){print}else{$9="GT"; $10="1/1"; print $0}}' \
    | bgzip -c > NA12878/GRCh37/HG001_GRCh37_Fake_Genotypes.vcf.gz
@@ -123,7 +131,7 @@ zcat NA12878/GRCh38/HG001_GRCh38_Fake_Genotypes_shared.vcf.gz | grep -v '#' | wc
 3123248
 ```
 
-# Run the remapping pipeline 
+## Run the remapping pipeline 
 See documentation in the [README](README.md) for how to perform the remapping
 set `$GENOME_DIR` to the directory containing the genomes 
 set `$REMAPPING_DIR` to the output directory
@@ -134,7 +142,7 @@ GRCh37 variants to GRCh38 genome
 mkdir ${REMAPPING_DIR}/GRCh37_to_GRCh38
 remapping_commands.sh -g ${$GENOME_DIR}/hs37d5/hs37d5.fa \
     -n ${$GENOME_DIR}/GRCh38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna  \
-    -v ${GIAB_VAR}/NA12878/GRCh37/HG001_GRCh37_Fake_Genotypes_shared.vcf.gz  \
+    -v ${GIAB_DIR}/NA12878/GRCh37/HG001_GRCh37_Fake_Genotypes_shared.vcf.gz  \
     -f 50 -s 0.6 -d 0.04 -o ${REMAPPING_DIR}/GRCh37_to_GRCh38/NA12878_f50_s0.6_d0.04.vcf
 ```
 
@@ -143,20 +151,20 @@ GRCh38 variant to GRCh37 genome:
 mkdir ${REMAPPING_DIR}/GRCh38_to_GRCh37
 remapping_commands.sh -g ${$GENOME_DIR}/GRCh38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna  \
     -n ${$GENOME_DIR}/hs37d5/hs37d5.fa \
-    -v ${GIAB_VAR}/NA12878/GRCh38/HG001_GRCh38_Fake_Genotypes_shared.vcf.gz \
+    -v ${GIAB_DIR}/NA12878/GRCh38/HG001_GRCh38_Fake_Genotypes_shared.vcf.gz \
     -f 50 -s 0.6 -d 0.04 -o ${REMAPPING_DIR}/GRCh38_to_GRCh37/NA12878_f50_s0.6_d0.04.vcf
 ```
 
 
 
-# Comparison between remapped and standard using Hap.py
+## Comparison between remapped and standard using Hap.py
 Hap.py was installed using singularity and can be accessed using
 
 set `$SINGULARITY_DIR` to the location where singularity images are kept see [this comment](https://www.ebi.ac.uk/panda/jira/browse/EVA-1835?focusedCommentId=312411&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-312411) for detail.
 
 ```bash
 singularity exec \
-    -B ${GIAB_VAR}:/giab \
+    -B ${GIAB_DIR}:/giab \
     -B ${REMAPPING_DIR}:/remapping \
     -B ${$GENOME_DIR}:/genomes \
     ${SINGULARITY_DIR}/hap.py.simg \
@@ -171,7 +179,7 @@ singularity exec \
 
 ```bash
 singularity exec \
-    -B ${GIAB_VAR}:/giab \
+    -B ${GIAB_DIR}:/giab \
     -B ${REMAPPING_DIR}:/remapping \
     -B ${$GENOME_DIR}:/genomes \
     ${SINGULARITY_DIR}/hap.py.simg \
