@@ -1,7 +1,6 @@
 # Evaluation of the variant remapping pipeline
 
-To evaluate the remapping pipeline we use a 
-To assess the quality of the remapping pipeline we remap variants GiaB from GRCh37 to GRCh38 
+To assess the quality of the remapping pipeline we remap GiaB variants from GRCh37 to GRCh38 
 and compare them with GiaB variants from GRCh38. To ensure that the remapped and standard variants are comparable 
 We first filter the gold standard to keep only variants that are present in both dataset.
 
@@ -17,7 +16,7 @@ Some software required by the remapping pipeline are also assumed to be installe
 
 ## Preparing GiaB datasets 
 
-Set `GIAB_DIR` to points to the directory where the variants will be stored
+Set `GIAB_DIR` to points to the directory where the gold standard variants will be stored
 
 |:warning: This can be skipped if the datasets have been prepared before.|
 |---|
@@ -41,7 +40,7 @@ Prepare directory structure
 
 ```bash
 mkdir -p ${GIAB_DIR}/NA12878/GRCh37
-mkdir -p ${GIAB_DIR}NA12878/GRCh38
+mkdir -p ${GIAB_DIR}/NA12878/GRCh38
 ```
 
 Download the variant datasets 
