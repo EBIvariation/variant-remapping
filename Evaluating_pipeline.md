@@ -5,16 +5,16 @@ To assess the quality of the remapping pipeline we remap GiaB variants from GRCh
 We then compare the remapped and standard dataset using [hap.py](https://github.com/Illumina/hap.py)
 
 ## Prerequisite and Environment variables
-`GIAB_DIR`: directory where the gold standard variants are stored
-`REMAPPING_DIR`: directory where the output of the remapping pipeline is stored
-`GENOME_DIR`: directory where the reference genomes are stored
-`SINGULARITY_DIR`: directory where the singularity images are stored
+* `GIAB_DIR`: directory where the gold standard variants are stored
+* `REMAPPING_DIR`: directory where the output of the remapping pipeline is stored
+* `GENOME_DIR`: directory where the reference genomes are stored
+* `SINGULARITY_DIR`: directory where the singularity images are stored
 
-Some software required by the remapping pipeline are also assumed to be installed and in the `PATH`
+Some software required by the remapping pipeline are also assumed to be installed and in the `PATH`.
 
 ## Preparing GiaB datasets 
 
-Set `GIAB_DIR` to points to the directory where the gold standard variants will be stored
+Set `GIAB_DIR` to points to the directory where the gold standard variants will be stored.
 
 |:warning: This can be skipped if the datasets have been prepared before.|
 |---|
@@ -128,9 +128,9 @@ zcat NA12878/GRCh38/HG001_GRCh38_Fake_Genotypes_shared.vcf.gz | grep -v '#' | wc
 ```
 
 ## Run the remapping pipeline 
-See documentation in the [README](README.md) for how to perform the remapping
-set `$GENOME_DIR` to the directory containing the genomes 
-set `$REMAPPING_DIR` to the output directory
+See documentation in the [README](README.md) for how to perform the remapping.
+* Set `$GENOME_DIR` to the directory containing the genomes 
+* Set `$REMAPPING_DIR` to the output directory
 
 At the moment the pipeline is run this way: 
 GRCh37 variants to GRCh38 genome
