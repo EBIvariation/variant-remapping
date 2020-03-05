@@ -1,10 +1,8 @@
 # Evaluation of the variant remapping pipeline
 
-To assess the quality of the remapping pipeline we remap GiaB variants from GRCh37 to GRCh38 
-and compare them with GiaB variants from GRCh38. To ensure that the remapped and standard variants are comparable 
-We first filter the gold standard to keep only variants that are present in both dataset.
+To assess the quality of the remapping pipeline we remap GiaB variants from GRCh37 to GRCh38 and compare them with GiaB variants from GRCh38. To ensure that the remapped and standard variants are comparable, we first filter the gold standard to keep only variants that are present in both datasets.
 
-We then compare the remapped and standard dataset using using [hap.py](https://github.com/Illumina/hap.py)
+We then compare the remapped and standard dataset using [hap.py](https://github.com/Illumina/hap.py)
 
 ## Prerequisite and Environment variables
 `GIAB_DIR`: directory where the gold standard variants are stored
@@ -21,13 +19,9 @@ Set `GIAB_DIR` to points to the directory where the gold standard variants will 
 |:warning: This can be skipped if the datasets have been prepared before.|
 |---|
 
-The variant remapping pipeline was run for on two variant datasets that were download from GiaB website. 
-The variant data is here:
+The variant remapping pipeline was run on two variant datasets that were downloaded from the GiaB website. The variant data is here: ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/
 
-ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/NA12878_HG001/NISTv3.3.2/
-
-The reference genomes used for calling the GiaB variant are defined in
- [the FAQ point 5](https://www.nist.gov/programs-projects/faqs-genome-bottle)
+The reference genomes used for calling the GiaB variants are defined in [the FAQ point 5](https://www.nist.gov/programs-projects/faqs-genome-bottle)
 
 ```
 GRCh37 reference with decoy:
@@ -79,7 +73,7 @@ zcat common_all_20180418.vcf.gz | awk '{if (/^#/){print } else{print "chr"$0}}' 
 bcftools annotate -a common_all_20180418_with_chr.vcf.gz -c ID HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_PGandRTGphasetransfer.vcf.gz | bgzip -c > HG001_GRCh38_annotated.vcf.gz
 ```
 
-|:warning: Hap.py comapre the variants and the genotype provided. However the remapping currently does not carry over the genotypes. This means that the genotypes needs to be mocked in both the remapped and the standard datasets to allow the variants to be compares accurately|
+|:warning: Hap.py compares the variants and the genotype provided. However the remapping currently does not carry over the genotypes. This means that the genotypes needs to be mocked in both the remapped and the standard datasets to allow the variants to be compares accurately|
 |---|
 
 ```bash
@@ -94,7 +88,7 @@ gunzip -c  NA12878/GRCh38/HG001_GRCh38_annotated.vcf.gz \
 ```
 
 
-Then we get all shared rdID from both files
+Then we get all shared rsID from both files
 
 ```bash
 # Match the rsids that are in both GRCh37 and GRCh38
@@ -145,7 +139,7 @@ remapping_commands.sh -g ${$GENOME_DIR}/hs37d5/hs37d5.fa \
     -f 50 -s 0.6 -d 0.04 -o ${REMAPPING_DIR}/GRCh37_to_GRCh38/NA12878_f50_s0.6_d0.04.vcf
 ```
 
-GRCh38 variant to GRCh37 genome:
+GRCh38 variants to GRCh37 genome:
 ```
 mkdir ${REMAPPING_DIR}/GRCh38_to_GRCh37
 remapping_commands.sh -g ${$GENOME_DIR}/GRCh38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna  \
@@ -157,9 +151,7 @@ remapping_commands.sh -g ${$GENOME_DIR}/GRCh38_no_alt/GCA_000001405.15_GRCh38_no
 
 
 ## Comparison between remapped and standard using Hap.py
-Hap.py was installed using singularity and can be accessed using
-
-set `$SINGULARITY_DIR` to the location where singularity images are kept see [this comment](https://www.ebi.ac.uk/panda/jira/browse/EVA-1835?focusedCommentId=312411&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-312411) for detail.
+Hap.py was installed using Singularity and can be accessed by setting `$SINGULARITY_DIR` to the location where singularity images are kept. See [this comment](https://www.ebi.ac.uk/panda/jira/browse/EVA-1835?focusedCommentId=312411&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-312411) for details.
 
 ```bash
 singularity exec \
