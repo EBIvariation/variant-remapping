@@ -59,7 +59,7 @@ for read in bamfile:
     except KeyError:
         XS = -flank_length  # Set an arbitrary low value for the "artificial" secondary alignment 
 
-    # Calculating correct position and filtering based on alignement around the variant position
+    # Calculating correct position and filtering based on alignment around the variant position
     start = read.pos
     perf_counter = 0  # This counter will count the number of matches + mismatches around the variant position
     varpos = start  # Store the alignment start position

@@ -22,6 +22,6 @@ with open(args.vcf, 'r') as vcf, open(args.outfile, 'w') as out_vcf:
             # Gets corresponding REF allele from the oldrefalleles file
                 out_vcf.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (variant[0], variant[1], variant[2], 
                     linecache.getline(args.oldrefalleles, i+1).rstrip(), variant[4], variant[5], 
-                    variant[6] ,variant[7]))
+                    variant[6], variant[7]))
             else:
                 out_vcf.write(line)
