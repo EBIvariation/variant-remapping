@@ -160,14 +160,15 @@ Hap.py was installed using Singularity and can be accessed by setting `$SINGULAR
 singularity exec \
     -B ${GIAB_DIR}:/giab \
     -B ${REMAPPING_DIR}:/remapping \
-    -B ${$GENOME_DIR}:/genomes \
+    -B ${GENOME_DIR}:/genomes \
     ${SINGULARITY_DIR}/hap.py.simg \
     /opt/hap.py/bin/hap.py  \
         /giab/NA12878/GRCh38/HG001_GRCh38_Fake_Genotypes_shared.vcf.gz \
         /remapping/GRCh37_to_GRCh38/NA12878_f50_s0.6_d0.04_pre_final_vcf_fixed.vcf.gz \
         -f /giab/NA12878/GRCh38/HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel_noCENorHET7.bed \
         -r /genomes/GRCh38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna \
-        -o /remapping/GRCh37_to_GRCh38/hap.py_assessement 
+        -o /remapping/GRCh37_to_GRCh38/hap.py_assessement \
+        -V
 ```
 
 
@@ -175,12 +176,13 @@ singularity exec \
 singularity exec \
     -B ${GIAB_DIR}:/giab \
     -B ${REMAPPING_DIR}:/remapping \
-    -B ${$GENOME_DIR}:/genomes \
+    -B ${GENOME_DIR}:/genomes \
     ${SINGULARITY_DIR}/hap.py.simg \
     /opt/hap.py/bin/hap.py  \
         /giab/NA12878/GRCh37/HG001_GRCh37_Fake_Genotypes_shared.vcf.gz \
         /remapping/GRCh38_to_GRCh37/NA12878_f50_s0.6_d0.04_pre_final_vcf_fixed.vcf.gz \
         -f /giab/NA12878/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel.bed \
         -r /genomes/hs37d5/hs37d5.fa \
-        -o /remapping/GRCh38_to_GRCh37/hap.py_assessement 
+        -o /remapping/GRCh38_to_GRCh37/hap.py_assessement \
+        -V
 ```

@@ -27,22 +27,21 @@ echo "-----------------------1) Flanking sequence generation--------------------
 samtools faidx ../"$oldgenome"
 cut -f1,2 ../"$oldgenome".fai > "$oldgenome".chrom.sizes
 
-# Filter SNPs only
-bcftools filter -i 'TYPE="snp"' ../"$vcffile" -o snps_only.vcf
-
-# Unnecessary if input file is already SNP-filtered and uniq'ed, uncomment if needed: 
-# (also change the snps_only to snps_only.uniq)
-# Get unique variants based on rsIDs (column 3)
-#grep '^#' snps_only.vcf > snps_only.uniq.vcf
-#grep -v '^#' snps_only.vcf | sort -u -k3,3  >> snps_only.uniq.vcf
+#Decompress if required
+if [ "${vcffile: -7}" == ".vcf.gz" ]
+then
+  cp "$vcffile" input.vcf.gz
+  gzip -d -c "$vcffile" > input.vcf
+else
+  cp "$vcffile" input.vcf
+  bgzip -c "$vcffile" > input.vcf.gz
+fi
 
 # Store header
-bgzip snps_only.vcf
-bcftools view --header-only snps_only.vcf.gz -o vcf_header.txt
+bcftools view --header-only input.vcf.gz -o vcf_header.txt
 
 # Convert vcf to bed:
-gzip -d snps_only.vcf.gz
-vcf2bed < snps_only.vcf > variants.bed
+vcf2bed < input.vcf > variants.bed
 # The actual position of the variant is the second coordinate
 
 # Generate the flanking sequence intervals
