@@ -5,7 +5,7 @@ def helpMessage() {
     Index the provided genome with bowtie and samtools
     Usage:
             --fasta                     Fasta file containing the reference genome.
-            --outdir                    Directory where th index will be deployed.
+            --outdir                    Directory where the index will be deployed.
     """
 }
 
