@@ -23,16 +23,16 @@ process bowtieGenomeIndex {
     publishDir params.outdir,
         overwrite: false,
         mode: "move",
-        saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/reference/, "") }
+        saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/index/, "") }
 
     input:
         path 'reference' from params.fasta
 
     output:
-        path "reference.*.bt2"
+        path "index.*.bt2"
 
     """
-    bowtie2-build reference reference
+    bowtie2-build reference index
     """
 }
 
