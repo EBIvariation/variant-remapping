@@ -26,13 +26,13 @@ process bowtieGenomeIndex {
         saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/index/, "") }
 
     input:
-        path 'reference' from params.fasta
+        path 'genome_fasta' from params.fasta
 
     output:
         path "index.*.bt2"
 
     """
-    bowtie2-build reference index
+    bowtie2-build genome_fasta index
     """
 }
 
@@ -48,13 +48,13 @@ process samtoolsFaidx {
         saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/reference/, "") }
 
     input:
-        path 'reference' from params.fasta
+        path 'genome_fasta' from params.fasta
 
     output:
-        path "reference.fai" into genome_fai
+        path "genome_fasta.fai" into genome_fai
 
     """
-    samtools faidx reference
+    samtools faidx genome_fasta
     """
 }
 
@@ -69,12 +69,12 @@ process chromSizes {
         saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/reference/, "") }
 
     input:
-        path 'reference.fai' from genome_fai
+        path 'genome_fasta.fai' from genome_fai
 
     output:
-        path "reference.chrom.sizes" into chrom_sizes
+        path "genome_fasta.chrom.sizes" into chrom_sizes
 
     """
-    cut -f1,2 reference.fai > reference.chrom.sizes
+    cut -f1,2 genome_fasta.fai > genome_fasta.chrom.sizes
     """
 }
