@@ -15,6 +15,9 @@ if (params.help) exit 0, helpMessage()
 params.fasta  = "$baseDir/resources/genome.fa"
 params.outdir = "$baseDir/resources/"
 
+
+basename = file(params.fasta).getName()
+
 /*
  * Index the provided reference genome using bowtie build
  */
@@ -22,17 +25,16 @@ process bowtieGenomeIndex {
 
     publishDir params.outdir,
         overwrite: false,
-        mode: "move",
-        saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/index/, "") }
+        mode: "move"
 
     input:
-        path 'genome_fasta' from params.fasta
+        path "genome_fasta" from params.fasta
 
     output:
-        path "index.*.bt2"
+        path "$basename.*.bt2"
 
     """
-    bowtie2-build genome_fasta index
+    bowtie2-build genome_fasta $basename
     """
 }
 
@@ -44,17 +46,16 @@ process samtoolsFaidx {
 
     publishDir params.outdir,
         overwrite: false,
-        mode: "copy",
-        saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/reference/, "") }
+        mode: "copy"
 
     input:
-        path 'genome_fasta' from params.fasta
+        path "$basename" from params.fasta
 
     output:
-        path "genome_fasta.fai" into genome_fai
+        path "${basename}.fai" into genome_fai
 
     """
-    samtools faidx genome_fasta
+    samtools faidx $basename
     """
 }
 
@@ -65,16 +66,15 @@ process chromSizes {
 
     publishDir params.outdir,
         overwrite: false,
-        mode: "copy",
-        saveAs: { filename -> file(params.fasta).getName() + filename.replaceFirst(/reference/, "") }
+        mode: "copy"
 
     input:
-        path 'genome_fasta.fai' from genome_fai
+        path "${basename}.fai" from genome_fai
 
     output:
-        path "genome_fasta.chrom.sizes" into chrom_sizes
+        path "${basename}.chrom.sizes" into chrom_sizes
 
     """
-    cut -f1,2 genome_fasta.fai > genome_fasta.chrom.sizes
+    cut -f1,2 ${basename}.fai > ${basename}.chrom.sizes
     """
 }
