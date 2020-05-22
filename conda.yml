@@ -1,0 +1,8 @@
+name: variant-remapping
+channels:
+  - bioconda
+  - defaults
+dependencies:
+  - bedtools=2.29.2
+  - bowtie2=2.4.1
+  - samtools=1.4.1-0 
