@@ -15,7 +15,7 @@ if (params.help) exit 0, helpMessage()
 params.fasta  = "$baseDir/resources/genome.fa"
 params.outdir = "$baseDir/resources/"
 
-// The basename variable contains the name and extension of the input file, e. g. "genome.fa"
+
 basename = file(params.fasta).getName()
 
 /*
@@ -37,6 +37,8 @@ process bowtieGenomeIndex {
     bowtie2-build genome_fasta $basename
     """
 }
+
+
 /*
  * Index the provided reference genome using samtools faidx
  */
@@ -47,13 +49,13 @@ process samtoolsFaidx {
         mode: "copy"
 
     input:
-        path "${basename}" from params.fasta
+        path "$basename" from params.fasta
 
     output:
         path "${basename}.fai" into genome_fai
 
     """
-    samtools faidx ${basename}
+    samtools faidx $basename
     """
 }
 
