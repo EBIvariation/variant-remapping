@@ -5,8 +5,8 @@ channels:
 dependencies:
   - bedtools=2.29.2
   - bowtie2=2.4.1
-  - samtools=1.4.1-0 
-  - bcftools=1.9 
+  - samtools=1.10
+  - bcftools=1.10.2
   - bedops=2.4.39
   - tabix=0.2.6
   - pysam
