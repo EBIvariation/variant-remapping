@@ -3,9 +3,9 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - bedtools
-  - bowtie2
-  - samtools
-  - bcftools
-  - bedops
-  - tabix
+  - bedtools=2.29.2
+  - bowtie2=2.4.1
+  - samtools=1.9
+  - bcftools=1.9
+  - bedops=2.4.39
+  - tabix=0.2.6
