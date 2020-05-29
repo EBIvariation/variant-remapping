@@ -9,5 +9,5 @@ dependencies:
   - bcftools=1.9 
   - bedops=2.4.39
   - tabix=0.2.6
-  - pysam
-  - biopython
+  - pysam=0.15.4s 
+  - biopython=1.76
