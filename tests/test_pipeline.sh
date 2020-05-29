@@ -16,6 +16,7 @@ nextflow run ${SOURCE_DIR}/remapping_pipeline.nf \
 --vcffile ${SOURCE_DIR}/resources/source_vcf.vcf \
 --outfile ${SOURCE_DIR}/resources/remap_vcf.vcf
 
+# Check the presence of the output file
 ls ${SOURCE_DIR}/resources/remap_vcf.vcf \
    ${SOURCE_DIR}/resources/remap_vcf.vcf.stats \
    ${SOURCE_DIR}/resources/genome.fa.1.bt2 \
