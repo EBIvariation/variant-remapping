@@ -22,6 +22,7 @@ install:
   # Create and activate the conda environment
   - conda env create -f conda.yml
   - conda activate variant-remapping
+  - pip install -r requirements.txt
 
 # command to run tests
 script:

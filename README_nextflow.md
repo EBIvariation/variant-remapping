@@ -15,6 +15,7 @@ conda env create -f conda.yml
 First activate the conda environment
 ```bash
 conda activate variant-remapping
+pip install -r requirements.txt
 ```
 
 Test data located in `resources` directory

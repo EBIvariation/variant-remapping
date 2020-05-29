@@ -9,5 +9,3 @@ dependencies:
   - bcftools
   - bedops
   - tabix
-  - pysam
-  - biopython
