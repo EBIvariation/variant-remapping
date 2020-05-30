@@ -23,6 +23,9 @@ basename = file(params.fasta).getName()
  */
 process bowtieGenomeIndex {
 
+    // Memory required is 10 times the size of the fasta in Bytes
+    memory file(params.fasta).size() * 10 + ' B'
+
     publishDir params.outdir,
         overwrite: false,
         mode: "move"

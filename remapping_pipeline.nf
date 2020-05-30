@@ -163,6 +163,9 @@ process extractVariantInfoToFastaHeader {
  */
 process alignWithBowtie {
 
+    // Memory required is 5 times the size of the fasta in Bytes
+    memory file(params.newgenome).size() * 5 + ' B'
+
     input:  
         path "variant_reads.fa" from variant_reads_with_info
         // This will get the directory containing the bowtie index linked in the directory
