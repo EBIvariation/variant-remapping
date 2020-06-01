@@ -17,14 +17,13 @@ params.outdir = "$baseDir/resources/"
 
 
 basename = file(params.fasta).getName()
-
 /*
  * Index the provided reference genome using bowtie build
  */
 process bowtieGenomeIndex {
 
-    // Memory required is 10 times the size of the fasta in Bytes
-    memory file(params.fasta).size() * 10 + ' B'
+    // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
+    memory Math.max(file(params.fasta).size() * 10, 1073741824) + ' B'
 
     publishDir params.outdir,
         overwrite: false,
