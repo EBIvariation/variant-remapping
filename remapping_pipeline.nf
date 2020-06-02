@@ -29,8 +29,6 @@ newgenome_fai = file("${params.newgenome}.fai")
 // basename and basedir of the output file to know how to name the output file
 outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
-
-
 /*
  * Store the original VCF header for later use
  */
@@ -64,7 +62,7 @@ process ConvertVCFToBed {
 }
 
 /*
- * Convert get the flanking region in bed format.
+ * Based on variants BED, generate the flanking regions BED.
  */
 process flankingRegionBed {
 
@@ -164,14 +162,12 @@ process extractVariantInfoToFastaHeader {
 process alignWithBowtie {
 
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    memory  Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
+    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
 
     input:  
         path "variant_reads.fa" from variant_reads_with_info
         // This will get the directory containing the bowtie index linked in the directory
         file 'bowtie_index' from newgenome_dir
-
-
     output:
         path "reads_aligned.bam" into reads_aligned_bam
 
@@ -181,7 +177,7 @@ process alignWithBowtie {
 }
 
 /*
- * Sort the bam file with samtools
+ * Sort the bam file with samtools and index the result.
  */
 process sortBam {
 
@@ -201,7 +197,7 @@ process sortBam {
 /*
  * 
  */
-process reversStrand {
+process reverseStrand {
 
     input:
         path "reads_aligned.sorted.bam" from reads_sorted_bam
@@ -251,10 +247,8 @@ process insertReferenceAllele {
     paste temp_first_3_columns.txt genome_alleles.fixed.txt temp_last_4_columns.txt > var_pre_final.vcf
     '''
 }
-
-
 /*
- * 
+ * Build the header for the final VCF output file.
  */
 process buildHeader {
 
@@ -280,8 +274,6 @@ process buildHeader {
     echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> final_header.txt
     """
 }
-
-
 /*
  * 
  */
@@ -291,8 +283,6 @@ process mergeHeaderAndContentAndFixRefAllele {
         path "final_header.txt" from final_header
         path "var_pre_final.vcf" from var_pre_final
         path "old_ref_alleles.txt" from old_ref_alleles
-
-
     output:
         path "pre_final_vcf.vcf" into pre_final_vcf
         
@@ -330,7 +320,7 @@ process normalise {
 }
 
 /*
- * 
+ * Calculate summary statistics for the final output VCF.
  */
 process calculateStats {
 

@@ -8,8 +8,6 @@ SOURCE_DIR=$(dirname $SCRIPT_DIR)
 nextflow run ${SOURCE_DIR}/genome_preparation.nf \
 --fasta ${SOURCE_DIR}/resources/genome.fa \
 --outdir ${SOURCE_DIR}/resources/
-
-
 nextflow run ${SOURCE_DIR}/remapping_pipeline.nf \
 --oldgenome ${SOURCE_DIR}/resources/genome.fa \
 --newgenome ${SOURCE_DIR}/resources/genome.fa \
