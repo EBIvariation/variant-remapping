@@ -2,22 +2,31 @@
 
 def helpMessage() {
     log.info"""
-    Index the provided genome with bowtie and samtools
-    Usage:
-            --oldgenome                     Fasta file containing the reference genome.
-            --outdir                    Directory where the index will be deployed.
+    Please ensure all input files are available
+    Inputs:
+            VCF file = $baseDir/resources/source.vcf"
+            Original genome = "$baseDir/resources/genome.fa
+            New genome = "$baseDir/resources/genome.fa"
+    Parameters:
+            params.vcffile = original vcf file containing variants to be remapped
+            params.oldgenome = source genome file used to discover variants from params.vcffile
+            params.outfile = final vcf containing variants mapped to new genome
+            params.newgenome = new genome which the original vcf file will be mapped against
+            params.flankingseq = The length of the flanking sequences that generates reads
+            params.scorecutoff = Percentage of the flanking sequences that should be used as the alignment Score cut-off threshold
+            params.diffcutoff = Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold
     """
 }
+// Show help message
+if (params.help) exit 0, helpMessage()
+
 params.flankingseq = 50
 params.scorecutoff = 0.6
 params.diffcutoff =  0.04
 params.outfile = "$baseDir/resources/remap_vcf.vcf"
-
-// Show help message
-if (params.help) exit 0, helpMessage()
 params.oldgenome = "$baseDir/resources/genome.fa"
 params.newgenome = "$baseDir/resources/genome.fa"
-params.vcffile = "$baseDir/resources/source_vcf.vcf"
+params.vcffile = "$baseDir/resources/source.vcf"
 
 // Index files for both old and new genomes 
 oldgenome_chrom_sizes = file("${params.oldgenome}.chrom.sizes")
@@ -29,40 +38,42 @@ newgenome_fai = file("${params.newgenome}.fai")
 // basename and basedir of the output file to know how to name the output file
 outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
+
+
 /*
  * Store the original VCF header for later use
  */
 process StoreVCFHeader {
 
     input:
-        path "source_vcf" from params.vcffile
+        path "source.vcf" from params.vcffile
 
     output:
         path "vcf_header.txt" into vcf_header
 
     """
-    bcftools view --header-only source_vcf -o vcf_header.txt
+    bcftools view --header-only source.vcf -o vcf_header.txt
     """
 }
 
 /*
- * Convert vcf file to bed format
+ * Convert VCF file to bed format
  */
 process ConvertVCFToBed {
 
     input:
-        path "source_vcf" from params.vcffile
+        path "source.vcf" from params.vcffile
 
     output:
         path "variants.bed" into variants_bed
 
     """
-    vcf2bed < source_vcf > variants.bed
+    vcf2bed < source.vcf > variants.bed
     """
 }
 
 /*
- * Based on variants BED, generate the flanking regions BED.
+ * Convert get the flanking region in bed format.
  */
 process flankingRegionBed {
 
@@ -162,12 +173,14 @@ process extractVariantInfoToFastaHeader {
 process alignWithBowtie {
 
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
+    memory  Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
 
     input:  
         path "variant_reads.fa" from variant_reads_with_info
         // This will get the directory containing the bowtie index linked in the directory
         file 'bowtie_index' from newgenome_dir
+
+
     output:
         path "reads_aligned.bam" into reads_aligned_bam
 
@@ -177,7 +190,7 @@ process alignWithBowtie {
 }
 
 /*
- * Sort the bam file with samtools and index the result.
+ * Sort the bam file with samtools
  */
 process sortBam {
 
@@ -195,7 +208,7 @@ process sortBam {
 }
 
 /*
- * 
+ * Correct reverse strand alleles
  */
 process reverseStrand {
 
@@ -247,8 +260,9 @@ process insertReferenceAllele {
     paste temp_first_3_columns.txt genome_alleles.fixed.txt temp_last_4_columns.txt > var_pre_final.vcf
     '''
 }
+
 /*
- * Build the header for the final VCF output file.
+ * Create the header for the output VCF
  */
 process buildHeader {
 
@@ -274,23 +288,42 @@ process buildHeader {
     echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> final_header.txt
     """
 }
+
 /*
- * 
+ * Add header to output VCF and merge with reference allele file
  */
-process mergeHeaderAndContentAndFixRefAllele {
+process mergeHeaderAndContent {
 
     input:
         path "final_header.txt" from final_header
         path "var_pre_final.vcf" from var_pre_final
         path "old_ref_alleles.txt" from old_ref_alleles
+
     output:
-        path "pre_final_vcf.vcf" into pre_final_vcf
+        path "vcf_out_with_header.vcf" into final_vcf_with_header
+        path "old_ref_alleles_with_header.txt" into old_ref_alleles_with_header
         
     """
     # Add header to the vcf file:
     cat final_header.txt var_pre_final.vcf > vcf_out_with_header.vcf
     # Also add it to the ref alleles file so that the line numbers match:
     cat final_header.txt old_ref_alleles.txt > old_ref_alleles_with_header.txt
+    """
+}
+
+/*
+ * Fix any variants with matching REF & ALT alleles
+ */
+process fixRefAllele {
+
+    input:
+        path "vcf_out_with_header.vcf" from final_vcf_with_header
+        path "old_ref_alleles_with_header.txt" from old_ref_alleles_with_header
+
+    output:
+        path "pre_final_vcf.vcf" into pre_final_vcf
+        
+    """
     # Test each variant to see if REF = ALT, if so, replace the current REF with the corresponding old REF (this is to 
     # deal with variants such as G > G)
     ${baseDir}/replace_refs.py -i vcf_out_with_header.vcf -r old_ref_alleles_with_header.txt -o pre_final_vcf.vcf
@@ -298,7 +331,7 @@ process mergeHeaderAndContentAndFixRefAllele {
 }
 
 /*
- * 
+ * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
  */
 process normalise {
 
@@ -311,16 +344,15 @@ process normalise {
         path "pre_final_vcf.vcf" from pre_final_vcf
 
     output:
-        path "${outfile_basename}" into output_file        
+        path "${outfile_basename}" into final_output_vcf        
     """
-    # Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
     bgzip -c pre_final_vcf.vcf > pre_final_vcf.vcf.gz
     bcftools norm -c ws -f genome.fa -N pre_final_vcf.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
 /*
- * Calculate summary statistics for the final output VCF.
+ * Create file containing remapping stats
  */
 process calculateStats {
 
@@ -329,7 +361,7 @@ process calculateStats {
         mode: "copy"
 
     input:
-        path outfile_basename from output_file
+        path outfile_basename from final_output_vcf
 
     output:
         path "${outfile_basename}.stats"
