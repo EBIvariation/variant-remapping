@@ -2,34 +2,43 @@
 
 def helpMessage() {
     log.info"""
-    Please ensure all input files are available
-    Inputs:
-            VCF file = $baseDir/resources/source.vcf"
-            Original genome = "$baseDir/resources/genome.fa
-            New genome = "$baseDir/resources/genome.fa"
+    Process a VCF file containing SNV or short indels associated with the old genome to remap the variant's coordinates to the new genome.
+
     Parameters:
             params.vcffile = original vcf file containing variants to be remapped
             params.oldgenome = source genome file used to discover variants from params.vcffile
             params.outfile = final vcf containing variants mapped to new genome
             params.newgenome = new genome which the original vcf file will be mapped against
-            params.flankingseq = The length of the flanking sequences that generates reads
-            params.scorecutoff = Percentage of the flanking sequences that should be used as the alignment Score cut-off threshold
-            params.diffcutoff = Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold
+            params.flankingseq = The length of the flanking sequences that generates reads (default 50)
+            params.scorecutoff = Percentage of the flanking sequences that should be used as the alignment Score cut-off threshold (default 0.6)
+            params.diffcutoff = Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold (default 0.04)
     """
 }
-// Show help message
-if (params.help) exit 0, helpMessage()
 
 params.flankingseq = 50
 params.scorecutoff = 0.6
 params.diffcutoff =  0.04
-params.outfile = "$baseDir/resources/remap_vcf.vcf"
-params.oldgenome = "$baseDir/resources/genome.fa"
-params.newgenome = "$baseDir/resources/genome.fa"
-params.vcffile = "$baseDir/resources/source.vcf"
+params.outfile = null
+params.oldgenome = null
+params.newgenome = null
+params.vcffile = null
+params.help = null
 
+// Show help message
+if (params.help) exit 0, helpMessage()
+
+// Test input files
+if (!params.vcffile || !params.oldgenome || !params.outfile || !params.newgenome) { 
+    if (!params.vcffile)    log.warn('Provide a input vcf file using --vcffile')
+    if (!params.oldgenome)  log.warn('Provide a fasta file for the old genome --oldgenome') 
+    if (!params.outfile)    log.warn('Provide a path to the output vcf file using --outfile') 
+    if (!params.newgenome)  log.warn('Provide a fasta file for the new genome file using --newgenome') 
+    exit 1, helpMessage()
+}
+ 
 // Index files for both old and new genomes 
-oldgenome_chrom_sizes = file("${params.oldgenome}.chrom.sizes")
+oldgenome_dir = file(params.oldgenome).getParent()
+oldgenome_basename = file(params.oldgenome).getName()
 oldgenome_fai = file("${params.oldgenome}.fai")
 newgenome_dir = file(params.newgenome).getParent()
 newgenome_basename = file(params.newgenome).getName()
@@ -38,6 +47,94 @@ newgenome_fai = file("${params.newgenome}.fai")
 // basename and basedir of the output file to know how to name the output file
 outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
+
+/*
+* Index the new reference genome using bowtie_build
+*/
+if ( !file("${newgenome_dir}/${newgenome_basename}.1.bt2").exists()){
+
+    process bowtieGenomeIndex {
+        // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
+        memory Math.max(file(params.newgenome).size() * 10, 1073741824) + ' B'
+
+        publishDir newgenome_dir,
+            overwrite: false,
+            mode: "move"
+
+        input:
+            path "genome_fasta" from params.newgenome
+
+        output:
+            path "$newgenome_basename.*.bt2" 
+
+        """
+        bowtie2-build genome_fasta $newgenome_basename
+        """
+    }
+}
+
+/*
+* Check that the fai index file for old genome exists and if it does not create it.
+* Once created the publishDir directive will place it in the location described by the oldgenome_fai variable
+*/
+if (!oldgenome_fai.exists()){
+    process samtoolsFaidxOld {
+
+        publishDir oldgenome_dir,
+            overwrite: false,
+            mode: "copy"
+
+        input:
+            path "${oldgenome_basename}" from params.oldgenome
+
+        output:
+            path "${oldgenome_basename}.fai" into oldgenome_fai
+
+        """
+        samtools faidx ${oldgenome_basename}
+        """
+    }
+}
+
+/*
+* Check that the fai index file for new genome exists and if it does not create it.
+* Once created the publishDir directive will place it in the location described by the newgenome_fai variable
+*/
+if (!newgenome_fai.exists()){
+    process samtoolsFaidxNew {
+
+        publishDir newgenome_dir,
+            overwrite: false,
+            mode: "copy"
+
+        input:
+            path "${newgenome_basename}" from params.newgenome
+
+        output:
+            path "${newgenome_basename}.fai" into newgenome_fai
+
+        """
+        samtools faidx ${newgenome_basename}
+        """
+    }
+}
+
+/*
+ * Extract chomosome/contig sizes
+ */
+process chromSizes {
+
+    input:
+        path "genome.fa.fai" from oldgenome_fai
+
+
+    output:
+        path "genome.fa.chrom.sizes" into chrom_sizes
+
+    """
+    cut -f1,2 genome.fa.fai > genome.fa.chrom.sizes 
+    """
+} 
 
 
 /*
@@ -79,7 +176,7 @@ process flankingRegionBed {
 
     input:
         path "variants.bed" from variants_bed
-        path "genome.chrom.sizes" from oldgenome_chrom_sizes
+        path "genome.chrom.sizes" from chrom_sizes
 
     output:
         path "flanking.filtered.bed" into flanking_bed
