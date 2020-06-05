@@ -17,11 +17,13 @@ params.outdir = "$baseDir/resources/"
 
 // The basename variable contains the name and extension of the input file, e. g. "genome.fa"
 basename = file(params.fasta).getName()
-
 /*
- * Index the provided reference genome using bowtie build
- */
+ * Index the provided reference genome using bowtie build
+ */
 process bowtieGenomeIndex {
+
+    // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
+    memory Math.max(file(params.fasta).size() * 10, 1073741824) + ' B'
 
     publishDir params.outdir,
         overwrite: false,
@@ -38,8 +40,8 @@ process bowtieGenomeIndex {
     """
 }
 /*
- * Index the provided reference genome using samtools faidx
- */
+ * Index the provided reference genome using samtools faidx
+ */
 process samtoolsFaidx {
 
     publishDir params.outdir,
@@ -58,8 +60,8 @@ process samtoolsFaidx {
 }
 
 /*
- * Extract chomosome/contig sizes
- */
+ * Extract chomosome/contig sizes
+ */
 process chromSizes {
 
     publishDir params.outdir,
@@ -75,4 +77,4 @@ process chromSizes {
     """
     cut -f1,2 ${basename}.fai > ${basename}.chrom.sizes
     """
-}
+} 

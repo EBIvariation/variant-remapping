@@ -1,0 +1,28 @@
+language: python
+jdk: openjdk8
+cache: pip
+
+python:
+  - "3.7"
+install:
+  # Install Nextflow
+  - mkdir /tmp/nextflow && cd /tmp/nextflow
+  - wget -qO- get.nextflow.io | bash
+  - export PATH=$PATH:/tmp/nextflow
+  - cd -
+  # Install dependencies
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - source "$HOME/miniconda/etc/profile.d/conda.sh"
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+  # Create and activate the conda environment
+  - conda env create -f conda.yml
+  - conda activate variant-remapping
+  - pip install -r requirements.txt
+
+# command to run tests
+script:
+  - tests/test_pipeline.sh
