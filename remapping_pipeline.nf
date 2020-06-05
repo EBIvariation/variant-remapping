@@ -149,7 +149,7 @@ process StoreVCFHeader {
         path "vcf_header.txt" into vcf_header
 
     """
-    bcftools view --header-only source.vcf -o vcf_header.txt
+    bcftools view --header-only source.vcf | grep -v '^##FORMAT' >  vcf_header.txt
     """
 }
 
