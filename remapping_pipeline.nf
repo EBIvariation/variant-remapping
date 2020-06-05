@@ -4,14 +4,16 @@ def helpMessage() {
     log.info"""
     Process a VCF file containing SNV or short indels associated with the old genome to remap the variant's coordinates to the new genome.
 
+    Inputs:
+            --vcffile      original vcf file containing variants to be remapped [required]
+            --oldgenome    source genome file used to discover variants from the file provided with --vcffile [required]
+            --newgenome    new genome which the original vcf file will be mapped against [required]
+    Outputs:
+            --outfile      final vcf containing variants mapped to new genome [required]
     Parameters:
-            params.vcffile = original vcf file containing variants to be remapped
-            params.oldgenome = source genome file used to discover variants from params.vcffile
-            params.outfile = final vcf containing variants mapped to new genome
-            params.newgenome = new genome which the original vcf file will be mapped against
-            params.flankingseq = The length of the flanking sequences that generates reads (default 50)
-            params.scorecutoff = Percentage of the flanking sequences that should be used as the alignment Score cut-off threshold (default 0.6)
-            params.diffcutoff = Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold (default 0.04)
+            --flankingseq  The length of the flanking sequences that generates reads (default 50)
+            --scorecutoff  Percentage of the flanking sequences that should be used as the alignment Score cut-off threshold (default 0.6)
+            --diffcutoff   Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold (default 0.04)
     """
 }
 
