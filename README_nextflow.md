@@ -24,5 +24,9 @@ tests/test_pipeline.sh
 
 Or with real data:
 ```bash
-nextflow run remapping_pipeline.nf --oldgenome <genome.fa> --newgenome <new_genome.fa> --vcffile <source.vcf> --outfile  <remap.vcf>
+nextflow run remapping_pipeline.nf \
+  --oldgenome <genome.fa> \
+  --newgenome <new_genome.fa> \
+  --vcffile <source.vcf> \
+  --outfile <remap.vcf>
 ```

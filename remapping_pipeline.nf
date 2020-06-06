@@ -12,7 +12,7 @@ def helpMessage() {
             --outfile      final vcf containing variants mapped to new genome [required]
     Parameters:
             --flankingseq  The length of the flanking sequences that generates reads (default 50)
-            --scorecutoff  Percentage of the flanking sequences that should be used as the alignment Score cut-off threshold (default 0.6)
+            --scorecutoff  Percentage of the flanking sequences that should be used as the alignment score cut-off threshold (default 0.6)
             --diffcutoff   Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold (default 0.04)
     """
 }
@@ -53,7 +53,7 @@ outfile_dir = file(params.outfile).getParent()
 /*
 * Index the new reference genome using bowtie_build
 */
-if ( !file("${newgenome_dir}/${newgenome_basename}.1.bt2").exists()){
+if (!file("${newgenome_dir}/${newgenome_basename}.1.bt2").exists()){
 
     process bowtieGenomeIndex {
         // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
