@@ -172,7 +172,7 @@ process ConvertVCFToBed {
 }
 
 /*
- * Convert get the flanking region in bed format.
+ * Based on variants BED, generate the flanking regions BED.
  */
 process flankingRegionBed {
 
@@ -272,7 +272,7 @@ process extractVariantInfoToFastaHeader {
 process alignWithBowtie {
 
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    memory  Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
+    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
 
     input:  
         path "variant_reads.fa" from variant_reads_with_info
@@ -289,7 +289,7 @@ process alignWithBowtie {
 }
 
 /*
- * Sort the bam file with samtools
+ * Sort the bam file with samtools and index the result.
  */
 process sortBam {
 
@@ -446,6 +446,7 @@ process normalise {
 
     output:
         path "${outfile_basename}" into final_output_vcf        
+
     """
     bgzip -c pre_final_vcf.vcf > pre_final_vcf.vcf.gz
     bcftools norm -c ws -f genome.fa -N pre_final_vcf.vcf.gz -o ${outfile_basename} -O v
