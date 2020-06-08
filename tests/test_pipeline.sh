@@ -5,7 +5,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 SOURCE_DIR=$(dirname $SCRIPT_DIR)
 
-nextflow run ${SOURCE_DIR}/remapping_pipeline.nf \
+nextflow run ${SOURCE_DIR}/main.nf \
 --oldgenome ${SCRIPT_DIR}/resources/genome.fa \
 --newgenome ${SCRIPT_DIR}/resources/new_genome.fa \
 --vcffile ${SCRIPT_DIR}/resources/source.vcf \

@@ -131,7 +131,7 @@ process chromSizes {
 
 
     output:
-        path "genome.fa.chrom.sizes" into chrom_sizes
+        path "genome.fa.chrom.sizes" into oldgenome_chrom_sizes
 
     """
     cut -f1,2 genome.fa.fai > genome.fa.chrom.sizes 
@@ -178,7 +178,7 @@ process flankingRegionBed {
 
     input:
         path "variants.bed" from variants_bed
-        path "genome.chrom.sizes" from chrom_sizes
+        path "genome.chrom.sizes" from oldgenome_chrom_sizes
 
     output:
         path "flanking.filtered.bed" into flanking_bed
@@ -320,7 +320,9 @@ process reverseStrand {
 
     """
     # Ensure that we will use the reverse_strand.py from this repo
-    ${baseDir}/reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f $params.flankingseq -s $params.scorecutoff -d $params.diffcutoff 
+    ${baseDir}/variant_remapping_tools/reverse_strand.py -i reads_aligned.sorted.bam \
+        -p old_ref_alleles.txt -o variants_remapped.vcf -f $params.flankingseq \
+        -s $params.scorecutoff -d $params.diffcutoff
     """
 }
 
@@ -339,8 +341,8 @@ process insertReferenceAllele {
 
     '''
     # Add interval for variant position in bed format (required by getfasta)
-    # Reprints all the columns, adding an extra column before the pos column as the pos-1, as bedtools getfasta requires a 
-    # bed file
+    # Reprints all the columns, adding an extra column before the pos column as the pos-1,
+    # as bedtools getfasta requires a bed file
     # Input: 
     # [chr]	[pos]	[rsID]	[ALT]	[QUAL]	[FILT]	[INFO]
     # Output:
@@ -425,7 +427,7 @@ process fixRefAllele {
     """
     # Test each variant to see if REF = ALT, if so, replace the current REF with the corresponding old REF (this is to 
     # deal with variants such as G > G)
-    ${baseDir}/replace_refs.py -i vcf_out_with_header.vcf -r old_ref_alleles_with_header.txt -o pre_final_vcf.vcf
+    ${baseDir}/variant_remapping_tools/replace_refs.py -i vcf_out_with_header.vcf -r old_ref_alleles_with_header.txt -o pre_final_vcf.vcf
     """
 }
 
