@@ -4,11 +4,11 @@ Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA fo
 **Method**: creates reads from the flanking sequences of each variant, then maps them to the new assembly using 
 bowtie2.
 
-Currently, it only SNPs and short indels but has not been tested with larger or more complex variants
+Currently, it only SNPs and short indels but has not been tested with larger or more complex variants.
 
 ## Prerequisites
 To run this pipeline you will need to install and configure [Nextflow](https://www.nextflow.io/docs/latest/getstarted.html#installation). 
-The pipeline uses other software that needs to be downloaded and installed locally. You can obtain them manually or use [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+The pipeline uses other software that needs to be downloaded and installed locally. You can obtain them manually or use [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 
 ### Installation using conda
 ```bash
