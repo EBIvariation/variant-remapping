@@ -17,12 +17,16 @@ conda activate variant-remapping
 pip install -r requirements.txt
 ```
 
-Test data is located in the `resources` directory:
+Run the test script to check that you have all the right dependencies installed properly 
 ```bash
-nextflow run genome_preparation.nf
+tests/test_pipeline.sh
 ```
 
 Or with real data:
 ```bash
-nextflow run genome_preparation.nf --fasta <genome.fa> --outdir <output directory>
+nextflow run remapping_pipeline.nf \
+  --oldgenome <genome.fa> \
+  --newgenome <new_genome.fa> \
+  --vcffile <source.vcf> \
+  --outfile <remap.vcf>
 ```

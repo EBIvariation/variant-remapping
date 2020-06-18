@@ -1,2 +1,2 @@
-pysam
-biopython
+pysam==0.15.4
+biopython==1.77
