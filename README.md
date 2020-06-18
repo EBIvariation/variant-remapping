@@ -42,12 +42,12 @@ tests/test_pipeline.sh
 ## Executing the pipeline
 ```bash
 nextflow run main.nf 
-    --oldgenome <genome.fa> 
-    --newgenome <new_genome.fa> 
-    --vcffile <source.vcf> 
-    --outfile <remap.vcf>
-    [--flankingseq 50]
-    [--scorecutoff 0.6]
+    --oldgenome <genome.fa> \
+    --newgenome <new_genome.fa> \
+    --vcffile <source.vcf> \
+    --outfile <remap.vcf> \
+    [--flankingseq 50] \
+    [--scorecutoff 0.6] \
     [--diffcutoff 0.04]
 ```
 
