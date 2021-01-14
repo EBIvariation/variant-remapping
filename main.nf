@@ -68,11 +68,14 @@ if (!file("${newgenome_dir}/${newgenome_basename}.1.bt2").exists()){
 
         output:
             path "$newgenome_basename.*.bt2" 
+            val "done" into bt2_done
 
         """
         bowtie2-build genome_fasta $newgenome_basename
         """
     }
+} else {
+    bt2_done = Channel.value("done")
 }
 
 /*
@@ -278,7 +281,8 @@ process alignWithBowtie {
         path "variant_reads.fa" from variant_reads_with_info
         // This will get the directory containing the bowtie index linked in the directory
         file 'bowtie_index' from newgenome_dir
-
+        // This ensures that bowtie index exists
+        val "unused" from bt2_done
 
     output:
         path "reads_aligned.bam" into reads_aligned_bam
