@@ -66,8 +66,6 @@ def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
 
 def process_bam_file(bam_file_path, output_file, old_ref_allele_output_file, flank_length, score_perc, diff_AS_XS_perc):
     bamfile = pysam.AlignmentFile(bam_file_path, 'rb')
-    outfile = open(output_file, 'w')
-    old_ref_alleles = open(old_ref_allele_output_file, 'w')
 
     # Calculate the score cutoff based on flanking seq length:
     score_cutoff = -(flank_length * score_perc)
@@ -76,23 +74,23 @@ def process_bam_file(bam_file_path, output_file, old_ref_allele_output_file, fla
 
     # Reverses the allele for variants that got mapped onto the reverse strand of the new genome, and prints everything
     # into correct columns
-    for read in bamfile:
-        if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
-            name = read.query_name
-            info = name.split("|")
-            nucl = info[3]
-            # Mapped onto reverse strand:
-            if read.is_reverse:  # Can be decoded with bitwise flag with & 16
-                nucl = Seq(nucl, generic_dna).complement()
+    with open(output_file, 'w') as outfile, open(old_ref_allele_output_file, 'w') as old_ref_alleles:
+        for read in bamfile:
+            if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
+                name = read.query_name
+                info = name.split("|")
+                nucl = info[3]
+                # Mapped onto reverse strand:
+                if read.is_reverse:  # Can be decoded with bitwise flag with & 16
+                    nucl = Seq(nucl, generic_dna).complement()
 
-            # Write it all to the file:
-            varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
-            outfile.write(
-                "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name, varpos, info[4], nucl, info[5], info[6], info[7]))
-            # Store old reference allele:
-            old_ref_alleles.write("%s\n" % info[2])
-    outfile.close()
-    old_ref_alleles.close()
+                # Write it all to the file:
+                varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
+                outfile.write(
+                    "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (read.reference_name, varpos, info[4], nucl, info[5], info[6], info[7]))
+                # Store old reference allele:
+                old_ref_alleles.write("%s\n" % info[2])
+
     print(counter['total'])
     print(counter['unmapped'])
     print(counter['primary_poor'])

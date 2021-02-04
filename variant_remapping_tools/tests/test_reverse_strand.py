@@ -3,7 +3,6 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 import pysam
-from pysam.libcalignedsegment import AlignedSegment
 
 from variant_remapping_tools.reverse_strand import calculate_variant_position, is_read_valid
 
