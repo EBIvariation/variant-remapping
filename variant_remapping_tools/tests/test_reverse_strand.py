@@ -77,5 +77,3 @@ class TestReverseStrand(TestCase):
         read = self._mock_read(cigartuples=((pysam.CMATCH, 51), (pysam.CDEL, 2), (pysam.CMATCH, 50)))
         assert is_read_valid(read, self.counter, 50, self.score_cutoff, self.diff_cutoff) is False
         assert self.counter == Counter({'total': 1, 'context_bad': 1})
-
-

@@ -67,7 +67,7 @@ def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
 def process_bam_file(bam_file_path, output_file, old_ref_allele_output_file, flank_length, score_perc, diff_AS_XS_perc):
     bamfile = pysam.AlignmentFile(bam_file_path, 'rb')
 
-    # Calculate the score cutoff based on flanking seq length:
+    # Calculate the score cutoff based on flanking seq length
     score_cutoff = -(flank_length * score_perc)
     diff_cutoff = flank_length * diff_AS_XS_perc
     counter = Counter()
