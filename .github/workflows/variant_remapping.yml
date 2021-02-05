@@ -23,7 +23,7 @@ jobs:
       run: |
         # Install dependencies
         # $CONDA is an environment variable pointing to the root of the miniconda directory
-        $CONDA/bin/conda env update --file conda.yml --name base --yes
+        $CONDA/bin/conda env update -q --file conda.yml --name base
         $CONDA/bin/conda run pip install -q -r requirements.txt
 
     - name: Test nextflow workflow
