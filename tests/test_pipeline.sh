@@ -8,7 +8,7 @@ SOURCE_DIR=$(dirname $SCRIPT_DIR)
 nextflow run ${SOURCE_DIR}/main.nf \
 --oldgenome ${SCRIPT_DIR}/resources/genome.fa \
 --newgenome ${SCRIPT_DIR}/resources/new_genome.fa \
---vcffile ${SCRIPT_DIR}/resources/source.vcf \
+--vcffile ${SCRIPT_DIR}/resources/source.vcf.gz \
 --outfile ${SCRIPT_DIR}/resources/remap.vcf
 
 # Check the presence of the output file

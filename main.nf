@@ -142,13 +142,34 @@ process chromSizes {
 } 
 
 
+if (file(params.vcffile).getExtension() == 'gz'){
+    /*
+     * Uncompress VCF file
+     */
+    process UncompressInputVCF {
+
+        input:
+            path "source.vcf.gz" from params.vcffile
+
+        output:
+            path "vcf_file" into vcf_file
+
+        """
+        gunzip -c  source.vcf.gz > vcf_file
+        """
+    }
+}else{
+    vcf_file = params.vcffile
+}
+
+
 /*
  * Store the original VCF header for later use
  */
 process StoreVCFHeader {
 
     input:
-        path "source.vcf" from params.vcffile
+        path "source.vcf" from vcf_file
 
     output:
         path "vcf_header.txt" into vcf_header
@@ -164,7 +185,7 @@ process StoreVCFHeader {
 process ConvertVCFToBed {
 
     input:
-        path "source.vcf" from params.vcffile
+        path "source.vcf" from vcf_file
 
     output:
         path "variants.bed" into variants_bed
@@ -277,7 +298,7 @@ process alignWithBowtie {
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
     memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
 
-    input:  
+    input:
         path "variant_reads.fa" from variant_reads_with_info
         // This will get the directory containing the bowtie index linked in the directory
         file 'bowtie_index' from newgenome_dir

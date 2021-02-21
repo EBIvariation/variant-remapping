@@ -18,10 +18,12 @@ with open(args.vcf, 'r') as vcf, open(args.outfile, 'w') as out_vcf:
             out_vcf.write(line)
         else:
             variant = line.split("\t")
-            if variant[3] == variant[4]:
+            old_ref = linecache.getline(args.oldrefalleles, i+1).rstrip()
+            # This hack only works for SNP and needs better mechanisms for indels
+            if variant[3] == variant[4] or len(old_ref) != 1:
             # Gets corresponding REF allele from the oldrefalleles file
                 out_vcf.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (variant[0], variant[1], variant[2], 
-                    linecache.getline(args.oldrefalleles, i+1).rstrip(), variant[4], variant[5], 
+                    old_ref, variant[4], variant[5],
                     variant[6], variant[7]))
             else:
                 out_vcf.write(line)
