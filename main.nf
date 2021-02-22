@@ -142,24 +142,26 @@ process chromSizes {
 } 
 
 
-if (file(params.vcffile).getExtension() == 'gz'){
-    /*
-     * Uncompress VCF file
-     */
-    process UncompressInputVCF {
+/*
+ * Uncompress VCF file
+ */
+process uncompressInputVCF {
 
-        input:
-            path "source.vcf.gz" from params.vcffile
+    input:
+        path "source.vcf" from params.vcffile
 
-        output:
-            path "vcf_file" into vcf_file
+    output:
+        path "uncompressed.vcf" into vcf_file
 
-        """
-        gunzip -c  source.vcf.gz > vcf_file
-        """
-    }
-}else{
-    vcf_file = params.vcffile
+    script:
+        if ( file(params.vcffile).getExtension() == 'gz' )
+            """
+            gunzip -c  source.vcf > uncompressed.vcf
+            """
+        else
+            """
+            ln -nfs source.vcf uncompressed.vcf
+            """
 }
 
 

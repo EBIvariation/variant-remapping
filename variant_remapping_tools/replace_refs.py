@@ -18,12 +18,16 @@ with open(args.vcf, 'r') as vcf, open(args.outfile, 'w') as out_vcf:
             out_vcf.write(line)
         else:
             variant = line.split("\t")
+            # Gets corresponding REF allele from the oldrefalleles file.
             old_ref = linecache.getline(args.oldrefalleles, i+1).rstrip()
-            # This hack only works for SNP and needs better mechanisms for indels
+            # The reference allele extracted from the new genome in insertReferenceAllele and stored in variant[3]
+            # is only one base long. There test "variant[3] == variant[4]" can only work if the ref and alt have
+            # the same length which won't be the case for indels.
+            # For insertion, we're leaving the single base extracted from the new genome (regardless of the alt)
+            # for deletion, we're using the old reference sequence (regardless of the alt)
+            # TODO: Correct this behaviour to have a consistent treatment of all variants types
             if variant[3] == variant[4] or len(old_ref) != 1:
-            # Gets corresponding REF allele from the oldrefalleles file
-                out_vcf.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (variant[0], variant[1], variant[2], 
-                    old_ref, variant[4], variant[5],
-                    variant[6], variant[7]))
+                out_vcf.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (variant[0], variant[1], variant[2], old_ref,
+                                                                  variant[4], variant[5], variant[6], variant[7]))
             else:
                 out_vcf.write(line)
