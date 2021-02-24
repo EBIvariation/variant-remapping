@@ -156,15 +156,13 @@ process uncompressInputVCF {
     script:
         if ( file(params.vcffile).getExtension() == 'gz' )
             """
-            gunzip -c  source.vcf > uncompressed.vcf
+            gunzip -c source.vcf > uncompressed.vcf
             """
         else
             """
             ln -nfs source.vcf uncompressed.vcf
             """
 }
-
-
 /*
  * Store the original VCF header for later use
  */
