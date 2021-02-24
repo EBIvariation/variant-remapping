@@ -7,9 +7,9 @@ import linecache
 def process_variant(line, line_num, oldrefalleles_file):
     variant = line.split('\t')
     # Gets corresponding REF allele from the oldrefalleles file.
-    old_ref = linecache.getline(oldrefalleles_file, line_num + 1).rstrip()
+    old_ref = linecache.getline(oldrefalleles_file, line_num).rstrip()
     # The reference allele extracted from the new genome in insertReferenceAllele and stored in variant[3]
-    # is only one base long. There test "variant[3] == variant[4]" can only work if the ref and alt have
+    # is only one base long. The test "variant[3] == variant[4]" can only work if the ref and alt have
     # the same length which won't be the case for indels.
     # For insertion, we're leaving the single base extracted from the new genome (regardless of the alt)
     # for deletion, we're using the old reference sequence (regardless of the alt)
@@ -18,6 +18,7 @@ def process_variant(line, line_num, oldrefalleles_file):
         return '\t'.join((str(e) for e in [variant[0], variant[1], variant[2], old_ref, variant[4], variant[5], variant[6], variant[7]]))
     else:
         return line
+
 
 if __name__ == "__main__":
     description = "replaces the REF allele with the old REF allele if REF = ALT in the remapped VCF"
@@ -34,4 +35,4 @@ if __name__ == "__main__":
             if line.startswith('#'):
                 out_vcf.write(line)
             else:
-                out_vcf.write(process_variant(line, i, args.oldrefalleles))
+                out_vcf.write(process_variant(line, i + 1, args.oldrefalleles))
