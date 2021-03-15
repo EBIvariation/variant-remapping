@@ -338,54 +338,19 @@ process reverseStrand {
 
     input:
         path "reads_aligned.sorted.bam" from reads_sorted_bam
+        path "genome.fa" from params.newgenome
 
     output:
-        path "old_ref_alleles.txt" into old_ref_alleles
         path "variants_remapped.vcf" into variants_remapped
 
     """
     # Ensure that we will use the reverse_strand.py from this repo
-    ${baseDir}/variant_remapping_tools/reverse_strand.py -i reads_aligned.sorted.bam \
-        -p old_ref_alleles.txt -o variants_remapped.vcf -f $params.flankingseq \
-        -s $params.scorecutoff -d $params.diffcutoff
+    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.sorted.bam \
+        -o variants_remapped.vcf -f $params.flankingseq \
+        -s $params.scorecutoff -d $params.diffcutoff --newgenome genome.fa
     """
 }
 
-/*
- * Insert the reference base from the reference genome. 
- */
-process insertReferenceAllele {
-
-    input:
-        path "variants_remapped.vcf" from variants_remapped
-        path "genome.fa" from params.newgenome
-        path "genome.fa.fai" from newgenome_fai
-
-    output:
-        path "var_pre_final.vcf" into var_pre_final
-
-    '''
-    # Add interval for variant position in bed format (required by getfasta)
-    # Reprints all the columns, adding an extra column before the pos column as the pos-1,
-    # as bedtools getfasta requires a bed file
-    # Input: 
-    # [chr]	[pos]	[rsID]	[ALT]	[QUAL]	[FILT]	[INFO]
-    # Output:
-    # [chr]	[pos-1]	[pos]	[rsID]	[ALT]	[QUAL]	[FILT]	[INFO]
-    awk '{print $1"\\t"$2-1"\\t"$2"\\t"$3"\\t"$4"\\t"$5"\\t"$6"\\t"$7}' variants_remapped.vcf > variants_remapped.bed
-    
-    # Getfasta to get the REF genome alleles and then extract the genome alleles without the positions
-    bedtools getfasta -tab -fi genome.fa -bed variants_remapped.bed | awk '{print $2}'> genome_alleles.txt
-    
-    # Make all alleles caps (sometimes there are lower-case bases)
-    tr a-z A-Z < genome_alleles.txt > genome_alleles.fixed.txt
-    
-    # Paste all the information into the correct columns
-    cut -f1-3 variants_remapped.vcf > temp_first_3_columns.txt
-    cut -f4-7 variants_remapped.vcf > temp_last_4_columns.txt
-    paste temp_first_3_columns.txt genome_alleles.fixed.txt temp_last_4_columns.txt > var_pre_final.vcf
-    '''
-}
 
 /*
  * Create the header for the output VCF
@@ -393,7 +358,7 @@ process insertReferenceAllele {
 process buildHeader {
 
     input:
-        path "var_pre_final.vcf" from var_pre_final
+        path "variants_remapped.vcf" from variants_remapped
         path "vcf_header.txt" from vcf_header
 
     output:
@@ -401,7 +366,7 @@ process buildHeader {
 
     """
     # Create list of contigs/chromosomes to be added to the header
-    cut -f 1 var_pre_final.vcf | sort -u > contig_names.txt
+    cut -f 1 variants_remapped.vcf | sort -u > contig_names.txt
     while read CHR; do echo "##contig=<ID=\${CHR}>"; done < contig_names.txt > contigs.txt
     # Add the reference assembly
     echo "##reference=${params.newgenome}" >> contigs.txt
@@ -422,37 +387,14 @@ process mergeHeaderAndContent {
 
     input:
         path "final_header.txt" from final_header
-        path "var_pre_final.vcf" from var_pre_final
-        path "old_ref_alleles.txt" from old_ref_alleles
+        path "variants_remapped.vcf" from variants_remapped
 
     output:
         path "vcf_out_with_header.vcf" into final_vcf_with_header
-        path "old_ref_alleles_with_header.txt" into old_ref_alleles_with_header
-        
+
     """
     # Add header to the vcf file:
-    cat final_header.txt var_pre_final.vcf > vcf_out_with_header.vcf
-    # Also add it to the ref alleles file so that the line numbers match:
-    cat final_header.txt old_ref_alleles.txt > old_ref_alleles_with_header.txt
-    """
-}
-
-/*
- * Fix any variants with matching REF & ALT alleles
- */
-process fixRefAllele {
-
-    input:
-        path "vcf_out_with_header.vcf" from final_vcf_with_header
-        path "old_ref_alleles_with_header.txt" from old_ref_alleles_with_header
-
-    output:
-        path "pre_final_vcf.vcf" into pre_final_vcf
-        
-    """
-    # Test each variant to see if REF = ALT, if so, replace the current REF with the corresponding old REF (this is to 
-    # deal with variants such as G > G)
-    ${baseDir}/variant_remapping_tools/replace_refs.py -i vcf_out_with_header.vcf -r old_ref_alleles_with_header.txt -o pre_final_vcf.vcf
+    cat final_header.txt variants_remapped.vcf > vcf_out_with_header.vcf
     """
 }
 
@@ -467,14 +409,14 @@ process normalise {
 
     input:
         path "genome.fa" from params.newgenome
-        path "pre_final_vcf.vcf" from pre_final_vcf
+        path "vcf_out_with_header.vcf" from final_vcf_with_header
 
     output:
         path "${outfile_basename}" into final_output_vcf        
 
     """
-    bgzip -c pre_final_vcf.vcf > pre_final_vcf.vcf.gz
-    bcftools norm -c ws -f genome.fa -N pre_final_vcf.vcf.gz -o ${outfile_basename} -O v
+    bgzip -c vcf_out_with_header.vcf > vcf_out_with_header.vcf.gz
+    bcftools norm -c ws -f genome.fa -N vcf_out_with_header.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
