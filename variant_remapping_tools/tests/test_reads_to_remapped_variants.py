@@ -12,6 +12,8 @@ class TestProcess(TestCase):
         assert fetch_bases(fasta=fasta_path, contig='chr1', length=3, start=353) == 'GGA'
         assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=1078) == 'G'
         assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=1404) == 'G'
+        assert fetch_bases(fasta=fasta_path, contig='chr1', length=3, start=1818) == 'AAC'
+        assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=2030) == 'A'
 
     def test_fetch_bases(self):
         fasta_path = '../../tests/resources/new_genome.fa'
@@ -20,8 +22,10 @@ class TestProcess(TestCase):
         assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=353) == 'G'
         assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=1078) == 'A'
         assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=1404) == 'G'
+        assert fetch_bases(fasta=fasta_path, contig='chr2', length=3, start=1818) == 'AAC'
+        assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=2030) == 'A'
 
-    def test_compare_old_vs_new(self):
+    def test_calculate_new_alleles(self):
         # No changes
         assert calculate_new_alleles(old_ref='A', new_ref='A', old_alt='C', is_reverse_strand=False) == ('A', 'C')
         # Alignment reverse strand
@@ -32,18 +36,16 @@ class TestProcess(TestCase):
         assert calculate_new_alleles(old_ref='A', new_ref='G', old_alt='C', is_reverse_strand=True) == ('G', 'T')
 
     def test_process_bam_file(self):
-        self.skipTest("INDELS are not working yet")
-
         """
         Given:
         chr1	48	.	C	A	50	PASS	.	GT	1/1
         chr1	98	.	C	CG	50	PASS	.	GT	1/1
-        chr1	353	.	GGA	G	50	PASS	.	GT	1/1
         chr1	1078	.	G	A	50	PASS	.	GT	1/1
-        chr1	1404	.	G	GCG	50	PASS	.	GT	1/1
+        chr1	1818	.	AAC	T	50	PASS	.	GT	1/1
+        chr1	2030	.	A	TCC	50	PASS	.	GT	1/1
         """
 
-        bamfile = "../../tests/resources/reads_aligned.sorted.bam"
+        bamfile = "../../tests/resources/reads_aligned_test.sorted.bam"
         fasta_path = '../../tests/resources/new_genome.fa'
         output_file = '/tmp/remapped.vcf'
         process_bam_file(bamfile, output_file, 50, 0.6, 0.04, fasta_path)
@@ -51,16 +53,18 @@ class TestProcess(TestCase):
         """
         Expected:
         chr2	98	.	C	CG	50	PASS	.
-        chr2	353	.	G	GGA	50	PASS	.
         chr2	1078	.	A	G	50	PASS	.
-        chr2	1404	.	G	GCG	50	PASS	.        
+        chr2	1818	.	AAC	T	50	PASS	.
+        chr2	2030	.	A	TCC	50	PASS	.
         """
 
         expected = ["chr2	98	.	C	CG	50	PASS	.\n",
-                    "chr2	353	.	G	GGA	50	PASS	.\n",
                     "chr2	1078	.	A	G	50	PASS	.\n",
-                    "chr2	1404	.	G	GCG	50	PASS	.\n"]
+                    "chr2	1818	.	AAC	T	50	PASS	.\n",
+                    "chr2	2030	.	A	TCC	50	PASS	.\n"]
 
         with open(output_file, 'r') as vcf:
             for(i, line) in enumerate(vcf):
                 assert line == expected[i]
+            # Expected and Generated VCF have the same number of lines
+            assert i+1 == len(expected)
