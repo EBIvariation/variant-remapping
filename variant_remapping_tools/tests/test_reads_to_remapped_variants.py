@@ -1,3 +1,4 @@
+import os
 from unittest import TestCase
 from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, calculate_new_alleles, process_bam_file
 
@@ -45,8 +46,8 @@ class TestProcess(TestCase):
         chr1	2030	.	A	TCC	50	PASS	.	GT	1/1
         """
 
-        bamfile = "../../tests/resources/reads_aligned_test.sorted.bam"
-        fasta_path = '../../tests/resources/new_genome.fa'
+        bamfile = self.get_test_resource("reads_aligned_test.sorted.bam")
+        fasta_path = self.get_test_resource('new_genome.fa')
         output_file = '/tmp/remapped.vcf'
         process_bam_file(bamfile, output_file, 50, 0.6, 0.04, fasta_path)
 
@@ -68,3 +69,17 @@ class TestProcess(TestCase):
                 assert line == expected[i]
             # Expected and Generated VCF have the same number of lines
             assert i+1 == len(expected)
+
+    @staticmethod
+    def get_test_resource(resource_name):
+        """
+        Gets full path to the test resource located in the same directory as the test module.
+        """
+        # Full path to this module.
+        this_module = os.path.abspath(__file__)
+        # Full path to the directory where it is contained.
+        module_directory = os.path.dirname(this_module)
+        # Full path to the directory where the test resources are (variant-remapping/tests/resources)
+        resource_directory = os.path.dirname(os.path.dirname(module_directory)) + '/tests'
+        # Full path to the requested resource.
+        return os.path.join(resource_directory, 'resources', resource_name)
