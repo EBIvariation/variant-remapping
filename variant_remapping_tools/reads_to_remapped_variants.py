@@ -86,6 +86,7 @@ def fetch_bases(fasta, contig, length, start):
 
 
 def calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand):
+    """Given allele and strand information, calculate the new (ref, alt) pair."""
     # If reverse strand -> calculate complement
     old_ref_processed = old_ref
     old_alt_processed = old_alt
