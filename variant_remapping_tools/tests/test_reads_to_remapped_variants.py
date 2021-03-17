@@ -38,6 +38,10 @@ class TestProcess(TestCase):
         assert calculate_new_alleles(old_ref='A', new_ref='C', old_alt='C', is_reverse_strand=False) == ('C', 'A')
         # Alignment reverse strand and allele change
         assert calculate_new_alleles(old_ref='A', new_ref='G', old_alt='C', is_reverse_strand=True) == ('G', 'T')
+        # Insertion with no allele changes
+        assert calculate_new_alleles(old_ref='A', new_ref='A', old_alt='TCC', is_reverse_strand=False) == ('A', 'TCC')
+        # Deletion with no allele changes
+        assert calculate_new_alleles(old_ref='AAC', new_ref='AAC', old_alt='T', is_reverse_strand=False) == ('AAC', 'T')
 
     def test_process_bam_file(self):
         """
