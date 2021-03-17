@@ -36,7 +36,12 @@ def calculate_variant_position(read, flank_length):
     return varpos, perf_counter, local_region_size
 
 
-def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff, perf_counter, local_region_size):
+def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
+    """
+    Filter out reads that are:
+        - Unmapped
+        - Non primary (secondary): AS's that are too low and XS's that are too close to AS
+    """
     if read.is_secondary:  # We only want to deal with primary reads
         return False
     counter['total'] += 1
@@ -55,6 +60,13 @@ def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff, perf_c
     if AS - XS < diff_cutoff:
         counter['gap_small'] += 1
         return False
+    return True
+
+
+def is_local_alignment_perfect(counter, perf_counter, local_region_size):
+    """
+    Filter out non-perfect local alignment around the variant
+    """
     if perf_counter != 2 * local_region_size:
         counter['context_bad'] += 1
         return False
@@ -98,20 +110,21 @@ def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_
 
     with open(output_file, 'w') as outfile:
         for read in bamfile:
-            varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
-            if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff, perf_counter, local_region_size):
-                name = read.query_name
-                info = name.split('|')
-                old_ref = info[2]
-                old_alt = info[3]
-                is_reverse_strand = read.is_reverse
+            if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
+                varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
+                if is_local_alignment_perfect(counter, perf_counter, local_region_size):
+                    name = read.query_name
+                    info = name.split('|')
+                    old_ref = info[2]
+                    old_alt = info[3]
+                    is_reverse_strand = read.is_reverse
 
-                new_ref = fetch_bases(new_genome, read.reference_name, len(old_ref), varpos)
-                new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand)
+                    new_ref = fetch_bases(new_genome, read.reference_name, len(old_ref), varpos)
+                    new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand)
 
-                outfile.write(
-                    '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
-                                                          info[5], info[6], info[7]))
+                    outfile.write(
+                        '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
+                                                              info[5], info[6], info[7]))
 
     print(counter['total'])
     print(counter['unmapped'])
