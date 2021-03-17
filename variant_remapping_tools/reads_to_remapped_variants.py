@@ -76,9 +76,12 @@ def is_local_alignment_perfect(counter, perf_counter, local_region_size):
 
 
 def fetch_bases(fasta, contig, length, start):
+    """
+    Returns a subsection from a specified FASTA contig. The start coordinate is 1-based.
+    """
     zero_base_start = start - 1
     end = zero_base_start + length
-    new_ref = pysam.FastaFile(fasta).fetch(reference=contig, start=zero_base_start, end=end)
+    new_ref = fasta.fetch(reference=contig, start=zero_base_start, end=end)
     return new_ref
 
 
@@ -108,6 +111,7 @@ def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_
     diff_cutoff = flank_length * diff_AS_XS_perc
     counter = Counter()
 
+    fasta = pysam.FastaFile(new_genome)
     with open(output_file, 'w') as outfile:
         for read in bamfile:
             if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
@@ -118,7 +122,7 @@ def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_
                     old_ref = info[2]
                     old_alt = info[3]
 
-                    new_ref = fetch_bases(new_genome, read.reference_name, len(old_ref), varpos)
+                    new_ref = fetch_bases(fasta, read.reference_name, len(old_ref), varpos)
                     new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, read.is_reverse)
 
                     outfile.write(

@@ -1,4 +1,5 @@
 import os
+import pysam
 from unittest import TestCase
 from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, calculate_new_alleles, process_bam_file
 
@@ -6,25 +7,27 @@ from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, calc
 class TestProcess(TestCase):
 
     def test_fetch_old_bases(self):
-        fasta_path = '../../tests/resources/genome.fa'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=2, start=1) == 'CA'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=48) == 'C'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=98) == 'C'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=3, start=353) == 'GGA'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=1078) == 'G'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=1404) == 'G'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=3, start=1818) == 'AAC'
-        assert fetch_bases(fasta=fasta_path, contig='chr1', length=1, start=2030) == 'A'
+        fasta_path = self.get_test_resource('genome.fa')
+        fasta = pysam.FastaFile(fasta_path)
+        assert fetch_bases(fasta=fasta, contig='chr1', length=2, start=1) == 'CA'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=1, start=48) == 'C'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=1, start=98) == 'C'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=3, start=353) == 'GGA'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=1, start=1078) == 'G'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=1, start=1404) == 'G'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=3, start=1818) == 'AAC'
+        assert fetch_bases(fasta=fasta, contig='chr1', length=1, start=2030) == 'A'
 
     def test_fetch_bases(self):
-        fasta_path = '../../tests/resources/new_genome.fa'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=2, start=1) == 'CA'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=98) == 'C'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=353) == 'G'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=1078) == 'A'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=1404) == 'G'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=3, start=1818) == 'AAC'
-        assert fetch_bases(fasta=fasta_path, contig='chr2', length=1, start=2030) == 'A'
+        fasta_path = self.get_test_resource('new_genome.fa')
+        fasta = pysam.FastaFile(fasta_path)
+        assert fetch_bases(fasta=fasta, contig='chr2', length=2, start=1) == 'CA'
+        assert fetch_bases(fasta=fasta, contig='chr2', length=1, start=98) == 'C'
+        assert fetch_bases(fasta=fasta, contig='chr2', length=1, start=353) == 'G'
+        assert fetch_bases(fasta=fasta, contig='chr2', length=1, start=1078) == 'A'
+        assert fetch_bases(fasta=fasta, contig='chr2', length=1, start=1404) == 'G'
+        assert fetch_bases(fasta=fasta, contig='chr2', length=3, start=1818) == 'AAC'
+        assert fetch_bases(fasta=fasta, contig='chr2', length=1, start=2030) == 'A'
 
     def test_calculate_new_alleles(self):
         # No changes
