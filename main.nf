@@ -332,9 +332,10 @@ process sortBam {
 }
 
 /*
- * Correct reverse strand alleles
+ * Take the reads and process them to get the remapped variants
+ *
  */
-process reverseStrand {
+process readsToRemappedVariants {
 
     input:
         path "reads_aligned.sorted.bam" from reads_sorted_bam

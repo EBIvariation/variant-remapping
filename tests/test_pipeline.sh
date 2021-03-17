@@ -7,7 +7,7 @@ SOURCE_DIR=$(dirname $SCRIPT_DIR)
 
 # Build the Source VCF
 cat << EOT > "${SCRIPT_DIR}/resources/source.vcf"
-##fileformat=VCFv4.2
+##fileformat=VCFv4.3
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Consensus Genotype across all datasets with called genotype">
 #CHROM	POS ID  REF ALT QUAL	FILTER	INFO	FORMAT	HG001
 chr1	48	.	C	A	50	PASS	.	GT	1/1
@@ -48,4 +48,4 @@ EOT
 diff "${SCRIPT_DIR}/resources/expected_remap.vcf" <(grep -v '^##' "${SCRIPT_DIR}/resources/remap.vcf")
 
 # Clean up after the test
-#rm -rf work .nextflow* ${SCRIPT_DIR}/resources/*remap.vcf* ${SCRIPT_DIR}/resources/new_genome.fa.* ${SCRIPT_DIR}/resources/genome.fa.fai
+rm -rf work .nextflow* ${SCRIPT_DIR}/resources/*remap.vcf* ${SCRIPT_DIR}/resources/new_genome.fa.* ${SCRIPT_DIR}/resources/genome.fa.fai

@@ -51,14 +51,6 @@ class TestProcess(TestCase):
         output_file = '/tmp/remapped.vcf'
         process_bam_file(bamfile, output_file, 50, 0.6, 0.04, fasta_path)
 
-        """
-        Expected:
-        chr2	98	.	C	CG	50	PASS	.
-        chr2	1078	.	A	G	50	PASS	.
-        chr2	1818	.	AAC	T	50	PASS	.
-        chr2	2030	.	A	TCC	50	PASS	.
-        """
-
         expected = ["chr2	98	.	C	CG	50	PASS	.\n",
                     "chr2	1078	.	A	G	50	PASS	.\n",
                     "chr2	1818	.	AAC	T	50	PASS	.\n",
