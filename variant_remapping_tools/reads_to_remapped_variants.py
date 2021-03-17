@@ -117,10 +117,9 @@ def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_
                     info = name.split('|')
                     old_ref = info[2]
                     old_alt = info[3]
-                    is_reverse_strand = read.is_reverse
 
                     new_ref = fetch_bases(new_genome, read.reference_name, len(old_ref), varpos)
-                    new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand)
+                    new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, read.is_reverse)
 
                     outfile.write(
                         '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
