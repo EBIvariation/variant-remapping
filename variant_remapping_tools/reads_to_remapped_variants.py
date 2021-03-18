@@ -91,8 +91,8 @@ def calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand):
     old_ref_processed = old_ref
     old_alt_processed = old_alt
     if is_reverse_strand:
-        old_ref_processed = Seq(old_ref_processed, generic_dna).complement()
-        old_alt_processed = Seq(old_alt_processed, generic_dna).complement()
+        old_ref_processed = Seq(old_ref_processed, generic_dna).reverse_complement()
+        old_alt_processed = Seq(old_alt_processed, generic_dna).reverse_complement()
 
     # No changes
     if old_ref_processed == new_ref:
