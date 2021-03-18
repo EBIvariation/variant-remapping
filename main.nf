@@ -309,27 +309,10 @@ process alignWithBowtie {
         path "reads_aligned.bam" into reads_aligned_bam
 
     """
-    bowtie2 -k 2 --np 0 -f -x bowtie_index/${newgenome_basename} variant_reads.fa | samtools view -bS - > reads_aligned.bam
+    bowtie2 -k 10 --np 0 -f -x bowtie_index/${newgenome_basename} variant_reads.fa | samtools view -bS - > reads_aligned.bam
     """
 }
 
-/*
- * Sort the bam file with samtools and index the result.
- */
-process sortBam {
-
-    input:
-        path "reads_aligned.bam" from reads_aligned_bam
-
-    output:
-        path "reads_aligned.sorted.bam" into reads_sorted_bam
-        path "reads_aligned.sorted.bam.bai" into bam_index
-
-    """
-    samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
-    samtools index reads_aligned.sorted.bam
-    """
-}
 
 /*
  * Take the reads and process them to get the remapped variants
@@ -338,20 +321,36 @@ process sortBam {
 process readsToRemappedVariants {
 
     input:
-        path "reads_aligned.sorted.bam" from reads_sorted_bam
+        path "reads_aligned.bam" from reads_aligned_bam
         path "genome.fa" from params.newgenome
 
     output:
         path "variants_remapped.vcf" into variants_remapped
 
     """
-    # Ensure that we will use the reverse_strand.py from this repo
-    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.sorted.bam \
+    # Ensure that we will use the reads_to_remapped_variants.py from this repo
+    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
         -o variants_remapped.vcf -f $params.flankingseq \
-        -s $params.scorecutoff -d $params.diffcutoff --newgenome genome.fa
+        -s $params.scorecutoff -d $params.diffcutoff --max_alignment 9 \
+        --newgenome genome.fa
     """
 }
 
+/*
+ * Sort VCF file
+ */
+process sortVCF {
+
+    input:
+        path "variants_remapped.vcf" from variants_remapped
+
+    output:
+        path "variants_remapped_sorted.vcf" into variants_remapped_sorted
+
+    """
+    cat variants_remapped.vcf | awk '\$1 ~ /^#/ {print \$0;next} {print \$0 | "sort -k1,1 -k2,2n"}' > variants_remapped_sorted.vcf
+    """
+}
 
 /*
  * Create the header for the output VCF
@@ -359,7 +358,7 @@ process readsToRemappedVariants {
 process buildHeader {
 
     input:
-        path "variants_remapped.vcf" from variants_remapped
+        path "variants_remapped_sorted.vcf" from variants_remapped_sorted
         path "vcf_header.txt" from vcf_header
 
     output:
@@ -367,7 +366,7 @@ process buildHeader {
 
     """
     # Create list of contigs/chromosomes to be added to the header
-    cut -f 1 variants_remapped.vcf | sort -u > contig_names.txt
+    cut -f 1 variants_remapped_sorted.vcf | sort -u > contig_names.txt
     while read CHR; do echo "##contig=<ID=\${CHR}>"; done < contig_names.txt > contigs.txt
     # Add the reference assembly
     echo "##reference=${params.newgenome}" >> contigs.txt
@@ -388,14 +387,14 @@ process mergeHeaderAndContent {
 
     input:
         path "final_header.txt" from final_header
-        path "variants_remapped.vcf" from variants_remapped
+        path "variants_remapped_sorted.vcf" from variants_remapped_sorted
 
     output:
         path "vcf_out_with_header.vcf" into final_vcf_with_header
 
     """
     # Add header to the vcf file:
-    cat final_header.txt variants_remapped.vcf > vcf_out_with_header.vcf
+    cat final_header.txt variants_remapped_sorted.vcf > vcf_out_with_header.vcf
     """
 }
 
