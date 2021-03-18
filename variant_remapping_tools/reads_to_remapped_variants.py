@@ -37,6 +37,11 @@ def calculate_variant_position(read, flank_length):
 
 
 def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
+    """
+    Filter out reads that are:
+        - Unmapped
+        - Non primary (secondary): AS's that are too low and XS's that are too close to AS
+    """
     if read.is_secondary:  # We only want to deal with primary reads
         return False
     counter['total'] += 1
@@ -55,7 +60,13 @@ def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
     if AS - XS < diff_cutoff:
         counter['gap_small'] += 1
         return False
-    varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
+    return True
+
+
+def is_local_alignment_perfect(counter, perf_counter, local_region_size):
+    """
+    Filter out non-perfect local alignment around the variant
+    """
     if perf_counter != 2 * local_region_size:
         counter['context_bad'] += 1
         return False
@@ -64,7 +75,36 @@ def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
     return True
 
 
-def process_bam_file(bam_file_path, output_file, old_ref_allele_output_file, flank_length, score_perc, diff_AS_XS_perc):
+def fetch_bases(fasta, contig, length, start):
+    """
+    Returns a subsection from a specified FASTA contig. The start coordinate is 1-based.
+    """
+    zero_base_start = start - 1
+    end = zero_base_start + length
+    new_ref = fasta.fetch(reference=contig, start=zero_base_start, end=end)
+    return new_ref
+
+
+def calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand):
+    """Given allele and strand information, calculate the new (ref, alt) pair."""
+    # If reverse strand -> calculate complement
+    old_ref_processed = old_ref
+    old_alt_processed = old_alt
+    if is_reverse_strand:
+        old_ref_processed = Seq(old_ref_processed, generic_dna).reverse_complement()
+        old_alt_processed = Seq(old_alt_processed, generic_dna).reverse_complement()
+
+    # No changes
+    if old_ref_processed == new_ref:
+        return new_ref, old_alt_processed
+    # Ref and Alt are the same -> Alt changed to old Ref
+    if new_ref == old_alt_processed:
+        return new_ref, old_ref_processed
+    else:
+        return new_ref, old_alt_processed
+
+
+def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_AS_XS_perc, new_genome):
     bamfile = pysam.AlignmentFile(bam_file_path, 'rb')
 
     # Calculate the score cutoff based on flanking seq length
@@ -72,24 +112,23 @@ def process_bam_file(bam_file_path, output_file, old_ref_allele_output_file, fla
     diff_cutoff = flank_length * diff_AS_XS_perc
     counter = Counter()
 
-    # Reverses the allele for variants that got mapped onto the reverse strand of the new genome, and prints everything
-    # into correct columns
-    with open(output_file, 'w') as outfile, open(old_ref_allele_output_file, 'w') as old_ref_alleles:
+    fasta = pysam.FastaFile(new_genome)
+    with open(output_file, 'w') as outfile:
         for read in bamfile:
             if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
-                name = read.query_name
-                info = name.split('|')
-                nucl = info[3]
-                # Mapped onto reverse strand:
-                if read.is_reverse:  # Can be decoded with bitwise flag with & 16
-                    nucl = Seq(nucl, generic_dna).complement()
-
-                # Write it all to the file:
                 varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
-                outfile.write(
-                    '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], nucl, info[5], info[6], info[7]))
-                # Store old reference allele:
-                old_ref_alleles.write('%s\n' % info[2])
+                if is_local_alignment_perfect(counter, perf_counter, local_region_size):
+                    name = read.query_name
+                    info = name.split('|')
+                    old_ref = info[2]
+                    old_alt = info[3]
+
+                    new_ref = fetch_bases(fasta, read.reference_name, len(old_ref), varpos)
+                    new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, read.is_reverse)
+
+                    outfile.write(
+                        '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
+                                                              info[5], info[6], info[7]))
 
     print(counter['total'])
     print(counter['unmapped'])
@@ -112,20 +151,20 @@ def main():
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', '--bam', help='bam file containing remapped variants ')
     parser.add_argument('-o', '--outfile', help='name of new file')
-    parser.add_argument('-p', '--old_ref_alleles', help='name of output old ref alleles')
     parser.add_argument('-f', '--flankingseqlength', type=int, help='length of each of the flanking sequences')
     parser.add_argument('-s', '--scoreperc', type=float,
                         help='the alignment score cut off percentage of flanking seq' 'length (keeps values strictly above)')
     parser.add_argument('-d', '--difference_AS_XS', type=float, help='difference threshold % between AS and XS')
+    parser.add_argument('--newgenome', help='FASTA file of the target genome')
     args = parser.parse_args()
 
     process_bam_file(
         bam_file_path=args.bam,
         output_file=args.outfile,
-        old_ref_allele_output_file=args.old_ref_alleles,
         flank_length=args.flankingseqlength,
         score_perc=args.scoreperc,
-        diff_AS_XS_perc=args.difference_AS_XS
+        diff_AS_XS_perc=args.difference_AS_XS,
+        new_genome=args.newgenome
     )
 
 
