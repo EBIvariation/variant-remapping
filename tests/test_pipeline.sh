@@ -15,6 +15,7 @@ chr1	98	.	C	CG	50	PASS	.	GT	1/1
 chr1	1078	.	G	A	50	PASS	.	GT	1/1
 chr1	1818	.	AAC	T	50	PASS	.	GT	1/1
 chr1	2030	.	A	TCC	50	PASS	.	GT	1/1
+chr1	3510	.	T	C	50	PASS	.	GT	1/1
 EOT
 
 nextflow run ${SOURCE_DIR}/main.nf \

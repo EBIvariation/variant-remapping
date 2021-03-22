@@ -309,7 +309,7 @@ process alignWithBowtie {
         path "reads_aligned.bam" into reads_aligned_bam
 
     """
-    bowtie2 -k 10 --np 0 -f -x bowtie_index/${newgenome_basename} variant_reads.fa | samtools view -bS - > reads_aligned.bam
+    bowtie2 -k 2 --np 0 -f -x bowtie_index/${newgenome_basename} variant_reads.fa | samtools view -bS - > reads_aligned.bam
     """
 }
 
@@ -331,7 +331,7 @@ process readsToRemappedVariants {
     # Ensure that we will use the reads_to_remapped_variants.py from this repo
     ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
         -o variants_remapped.vcf -f $params.flankingseq \
-        -s $params.scorecutoff -d $params.diffcutoff --max_alignment 9 \
+        -s $params.scorecutoff -d $params.diffcutoff --max_alignment 1 \
         --newgenome genome.fa
     """
 }

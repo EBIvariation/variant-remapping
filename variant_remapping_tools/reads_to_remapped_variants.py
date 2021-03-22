@@ -128,7 +128,7 @@ def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_
     fasta = pysam.FastaFile(new_genome)
     with open(output_file, 'w') as outfile:
         for read_group in group_reads(bam_file_path):
-            if len(read_group) < max_nb_alignment:
+            if len(read_group) <= max_nb_alignment:
                 counter['total'] += 1
                 for read in read_group:
                     if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
