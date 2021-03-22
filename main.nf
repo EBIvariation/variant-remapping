@@ -164,6 +164,7 @@ process ConvertVCFToBed {
         path "variants.bed" into variants_bed
 
     """
+    # TODO: Change vcf2bed so it does not split the alternates into two lines
     vcf2bed < source.vcf > variants.bed
     """
 }
@@ -178,15 +179,16 @@ process flankingRegionBed {
         path "genome.chrom.sizes" from oldgenome_chrom_sizes
 
     output:
-        path "flanking.filtered.bed" into flanking_bed
+        path "flanking_r1.bed" into flanking_r1_bed
+        path "flanking_r2.bed" into flanking_r2_bed
 
     script:
-    readlength = params.flankingseq * 2 + 1
     """
-    bedtools slop -i variants.bed -g genome.chrom.sizes -b ${params.flankingseq} > flanking.bed
-    # Check if the intervals are less than the required length (2*flanking length + 1): this filters out reads that aren't 
-    # the correct number of bases long (origin: variant too close to the start or end of the chromosome)
-    awk  '(\$3 - \$2 == $readlength){print \$0}' flanking.bed > flanking.filtered.bed
+    awk 'BEGIN{OFS="\t"}{\$2=\$2-1;\$3=\$3-1; print \$0}' variants.bed \
+        | bedtools slop  -g genome.chrom.sizes -l $params.flankingseq -r 0  > flanking_r1.bed
+
+    awk 'BEGIN{OFS="\t"}{\$2=\$2+length(\$6);\$3=\$3+length(\$6); print \$0}' variants.bed \
+        | bedtools slop  -g genome.chrom.sizes -l 0 -r $params.flankingseq  > flanking_r2.bed
     """
 }
 
@@ -198,23 +200,27 @@ process flankingRegionFasta {
     memory '4 GB'
 
     input:  
-        path "flanking.bed" from flanking_bed
+        path "flanking_r1.bed" from flanking_r1_bed
+        path "flanking_r2.bed" from flanking_r2_bed
         path "genome.fa" from params.oldgenome
         path "genome.fa.fai" from oldgenome_fai
     
     output:
-        path "variants_reads.fa" into variants_reads
+        path "variants_read1.fa" into variants_read1
+        path "variants_read2.fa" into variants_read2
 
     '''
     # Get the fasta sequences for these intervals
-    bedtools getfasta -fi genome.fa -bed flanking.bed -fo variants_reads.fa
+    bedtools getfasta -fi genome.fa -bed flanking_r1.bed -fo variants_read1.fa
+    bedtools getfasta -fi genome.fa -bed flanking_r2.bed -fo variants_read2.fa
 
     # Replace the colon separators with "|":
     # Storing this information for later on in the script when we split the name by "|" to extract the relevant 
     # information (ALT allele, QUAL, FILT, INFO)
     # This is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
     # chosen
-    sed -i 's/:/|/' variants_reads.fa
+    sed -i 's/:/|/' variants_read1.fa
+    sed -i 's/:/|/' variants_read2.fa
     '''
 }
 
@@ -224,30 +230,39 @@ process flankingRegionFasta {
 process extractVariantInfoToFastaHeader {
 
     input:  
-        path "flanking.bed" from flanking_bed
-        path "variants_reads.fa" from variants_reads
-    
+        path "flanking_r1.bed" from flanking_r1_bed
+        path "flanking_r2.bed" from flanking_r2_bed
+        path "variants_read1.fa" from variants_read1
+        path "variants_read2.fa" from variants_read2
+
     output:
-        path "variant_reads.out.fa" into variant_reads_with_info
+        path "variant_read1.out.fa" into variant_read1_with_info
+        path "variant_read2.out.fa" into variant_read2_with_info
 
     // Disable the string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
     '''
+    # Store variant positions
+    cut -f 1,3 flanking_r1.bed > position.txt
+
     # Store ref bases
-    cut -f 6 flanking.bed > old_ref_bases.txt
+    cut -f 6 flanking_r1.bed > old_ref_bases.txt
 
     # Store rsIDs
-    cut -f 4 flanking.bed > rsIDs.txt
+    cut -f 4 flanking_r1.bed > rsIDs.txt
 
     # Store variant bases
-    cut -f 7  flanking.bed > variant_bases.txt
+    cut -f 7  flanking_r1.bed > variant_bases.txt
 
     # Store the other vcf columns
-    cut -f 5,8,9 flanking.bed > qual_filt_info.txt
+    cut -f 5,8,9 flanking_r1.bed > qual_filt_info.txt
 
     # Paste the names, variant bases, then fasta sequences into a new file
-    paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-    <(grep -v '^>' variants_reads.fa) > temp.txt
+    paste position.txt old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
+    <(grep -v '^>' variants_read1.fa) | awk '{print ">"$0}' > temp1.txt
+
+    paste position.txt old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
+    <(grep -v '^>' variants_read2.fa) | awk '{print ">"\$0}' > temp2.txt
 
     # Reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
     # command is a bit ugly
@@ -261,7 +276,8 @@ process extractVariantInfoToFastaHeader {
     # Output:
     # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]
     # [seq]
-    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp.txt | tr ' ' '\\n' > variant_reads.out.fa
+    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp1.txt | tr ' ' '\\n' > variant_read1.out.fa
+    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp2.txt | tr ' ' '\\n' > variant_read2.out.fa
     '''
 }
 
@@ -274,8 +290,9 @@ process alignWithMinimap {
     memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
 
     input:
-        path "variant_reads.fa" from variant_reads_with_info
-        // indexing is done on the fly so
+        path "variant_read1.fa" from variant_read1_with_info
+        path "variant_read2.fa" from variant_read2_with_info
+        // indexing is done on the fly so get the genome directly
         path 'genome.fa' from params.newgenome
 
     output:
@@ -285,7 +302,7 @@ process alignWithMinimap {
     # Options used by the 'sr' preset but allowing secondary alignments
     minimap2 -k21 -w11 --sr --frag=yes -A2 -B8 -O12,32 -E2,1 -r50 -p.5 \
              -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
-             -a genome.fa variant_reads.fa | samtools view -bS - > reads_aligned.bam
+             -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
     """
 }
 
@@ -307,8 +324,7 @@ process readsToRemappedVariants {
     """
     # Ensure that we will use the reads_to_remapped_variants.py from this repo
     ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
-        -o variants_remapped.vcf -f $params.flankingseq \
-        -s $params.scorecutoff -d $params.diffcutoff --max_alignment 1 \
+        -o variants_remapped.vcf  --filter_align_with_secondary \
         --newgenome genome.fa
     """
 }

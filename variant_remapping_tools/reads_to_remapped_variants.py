@@ -7,74 +7,64 @@ from Bio.Alphabet import generic_dna
 import pysam
 
 
-def calculate_variant_position(read, flank_length):
-    start = read.pos
-    perf_counter = 0  # This counter will count the number of matches + mismatches around the variant position
-    varpos = start  # Store the alignment start position
-    cig_list = []  # This list will contain the CIGAR values: 10M will become [0,0,0,0,0,0,0,0,0,0]
-    begin = 0
-    local_region_size = 5
-    # Create the list:
-    for (cig_type, cig_length) in read.cigartuples:
-        for i in range(begin, begin + cig_length):
-            cig_list.append(cig_type)
-        begin += cig_length
-    # Deletions need to be counted in the new variant position:
-    read_var_pos = start + flank_length + 1 + cig_list[0:flank_length + 1].count(pysam.CDEL)
-    for operator in range(0, flank_length + 2 + local_region_size + cig_list[0:flank_length+1].count(pysam.CDEL)):
-        # Stop incrementing varpos once we've reached read_var_pos:
-        if start + operator < read_var_pos:
-            # Mismatch/matches and deletions increase the position counter:
-            if cig_list[operator] == pysam.CMATCH or cig_list[operator] == pysam.CDEL:
-                varpos += 1
-        # If we are in the local region around the variant, but not at the position of the variant:
-        if ((start + operator >= (read_var_pos - local_region_size))
-                and (start + operator <= (read_var_pos + local_region_size))
-                and (start + operator != read_var_pos)):
-            if cig_list[operator] == 0:  # Match or mismatch
-                perf_counter += 1  # Increase the counter for perfect local region
-    return varpos, perf_counter, local_region_size
+def reverse_complement(sequence):
+    return Seq(sequence, generic_dna).reverse_complement()
 
 
-def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
+def calculate_new_variant_definition(read1, read2, ref_fasta):
     """
-    Filter out reads that are:
-        - Unmapped
-        - Non primary (secondary): AS's that are too low and XS's that are too close to AS
+    Resolve the variant definition from the flanking region alignment and old variant definition
     """
-    if read.is_secondary:  # We only want to deal with primary reads
-        return False
-    if read.is_unmapped:  # Can be decoded with bitwise flag with & 4 (4 means unmapped)
-        counter['unmapped'] += 1
-        return False
-    # Getting AS and XS:
-    AS = read.get_tag('AS')
-    try:
-        XS = read.get_tag('XS')  # Some variants don't have secondary alignments, which throws an error
-    except KeyError:
-        XS = -flank_length  # Set an arbitrary low value for the 'artificial' secondary alignment
-    if AS <= int(score_cutoff):
-        counter['primary_poor'] += 1
-        return False
-    if AS - XS < diff_cutoff:
-        counter['gap_small'] += 1
-        return False
-    return True
+    # grab information from the read name
+    name = read1.query_name
+    info = name.split('|')
+    old_ref = info[2]
+    old_alts = info[3].split(',')
+
+    # 1. Handle reference strand change
+    if not read1.is_reverse and not read2.is_reverse and read1.pos < read2.pos:
+        # Forward strand alignment
+        new_ref = fetch_bases(ref_fasta, read1.reference_name, read1.reference_end + 1, read2.pos - read1.reference_end)
+        new_pos = read1.reference_end + 1
+        old_ref_conv = old_ref
+        old_alt_conv = old_alts
+
+    elif read1.is_reverse and read2.is_reverse and read1.pos > read2.pos:
+        # Reverse strand alignment
+        new_ref = fetch_bases(ref_fasta, read1.reference_name, read2.reference_end + 1, read1.pos - read2.reference_end)
+        new_pos = read2.reference_end + 1
+        old_ref_conv = reverse_complement(old_ref)
+        old_alt_conv = [reverse_complement(alt) for alt in old_alts]
+    else:
+        error_msg = (f'Impossible read configuration: '
+                     f'read1 is_reverse: {read1.is_reverse}, '
+                     f'read2 is_reverse: {read2.is_reverse}, '
+                     f'read1 position: {read1.pos}, '
+                     f'read2 position: {read2.pos}')
+        print(error_msg)
+        raise ValueError(error_msg)
+
+    # 2. Assign new allele sequences
+    if new_ref == old_ref_conv:
+        new_alts = old_alt_conv
+    elif new_ref in old_alt_conv:
+        old_alt_conv.remove(new_ref)
+        new_alts = old_alt_conv
+        new_alts.append(old_ref_conv)
+    else:
+        new_alts = old_alt_conv
+        new_alts.append(old_ref_conv)
+
+    # 3. Correct zero-length reference sequence
+    if len(new_ref) == 0:
+        new_pos -= 1
+        new_ref = fetch_bases(ref_fasta, new_pos, 1)
+        new_alts = [new_ref + alt for alt in new_alts]
+
+    return new_pos, new_ref, new_alts
 
 
-def is_local_alignment_perfect(counter, perf_counter, local_region_size):
-    """
-    Filter out non-perfect local alignment around the variant
-    """
-    if perf_counter != 2 * local_region_size:
-        counter['context_bad'] += 1
-        return False
-    # Filter out AS's that are too low and XS's that are too close to AS, and those with a non-perfect local alignment:
-    counter['remapped'] += 1
-    return True
-
-
-def fetch_bases(fasta, contig, length, start):
+def fetch_bases(fasta, contig, start, length):
     """
     Returns a subsection from a specified FASTA contig. The start coordinate is 1-based.
     """
@@ -106,60 +96,64 @@ def calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand):
 def group_reads(bam_file_path):
     with pysam.AlignmentFile(bam_file_path, 'rb') as inbam:
         current_read_name = None
-        current_reads = []
+        primary_group = None
+        secondary_group = None
         for read in inbam:
             if read.query_name == current_read_name:
-                current_reads.append(read)
+                pass
             else:
                 if current_read_name:
-                    yield current_reads
-                current_reads = [read]
+                    yield primary_group, secondary_group
+                primary_group = []
+                secondary_group = []
+            if read.is_secondary:
+                secondary_group.append(read)
+            else:
+                primary_group.append(read)
             current_read_name = read.query_name
-        yield current_reads
+        yield primary_group, secondary_group
 
 
-def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_AS_XS_perc, max_nb_alignment,
-                     new_genome):
+def _order_reads(group):
+    """Order read in a group of two"""
+    read1, read2 = group
+    if read1.is_read1 and read2.is_read2:
+        return read1, read2
+    else:
+        return read2, read1
+
+
+def pass_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
+    if filter_align_with_secondary and len(secondary_group):
+        counter['Too many alignments'] += 1
+    elif len(primary_group) < 2 or all(read.is_unmapped for read in primary_group):
+        counter['Flank unmapped'] += 1
+    elif len(set(read.reference_name for read in primary_group)) != 1:
+        counter['Different chromosomes'] += 1
+    elif any(read.get_tag('AS') <= int(alignment_score_threshold) for read in primary_group):
+        counter['Poor alignment'] += 1
+    else:
+        return True
+    return False
+
+
+def process_bam_file(bam_file_path, output_file, new_genome, filter_align_with_secondary, alignment_score_threshold):
 
     # Calculate the score cutoff based on flanking seq length
-    score_cutoff = -(flank_length * score_perc)
-    diff_cutoff = flank_length * diff_AS_XS_perc
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
     with open(output_file, 'w') as outfile:
-        for read_group in group_reads(bam_file_path):
-            if len(read_group) <= max_nb_alignment:
-                counter['total'] += 1
-                for read in read_group:
-                    if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
-                        varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
-                        if is_local_alignment_perfect(counter, perf_counter, local_region_size):
-                            name = read.query_name
-                            info = name.split('|')
-                            old_ref = info[2]
-                            old_alt = info[3]
-
-                            new_ref = fetch_bases(fasta, read.reference_name, len(old_ref), varpos)
-                            new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, read.is_reverse)
-
-                            outfile.write(
-                                '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
-                                                                  info[5], info[6], info[7]))
-            else:
-                counter['Too many alignments'] += 1
-
-    print(counter['total'])
-    print(counter['Too many alignments'])
-    print(counter['unmapped'])
-    print(counter['primary_poor'])
-    print(counter['gap_small'])
-    print(counter['context_bad'])
-    print(counter['remapped'])
-    print('% of variants rejected for:')
-    print('Unmapped: {:.2%}'.format(counter['unmapped'] / counter['total']))
-    print('Primary alignment too poor: {:.2%}'.format(counter['primary_poor'] / counter['total']))
-    print('Primary and secondary alignments too close: {:.2%}'.format(counter['gap_small'] / counter['total']))
-    print('Local region around variant too poorly aligned: {:.2%}'.format(counter['context_bad'] / counter['total']))
+        for primary_group, secondary_group in group_reads(bam_file_path):
+            counter['total'] += 1
+            if pass_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
+                read1, read2 = _order_reads(primary_group)
+                varpos, new_ref, new_alts = calculate_new_variant_definition(read1, read2, fasta)
+                info = read1.query_name.split('|')
+                outfile.write(
+                    '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read1.reference_name, varpos, info[4], new_ref,
+                                                          ','.join(new_alts), info[5], info[6], info[7]))
+    for metric in ['Too many alignments', 'Flank unmapped', 'Different chromosomes', 'Poor alignment']:
+        print(f'{counter.get(metric, 0)} ({counter.get(metric, 0)/counter.get("total"):.2%}) variants rejected for {metric}')
 
 
 def main():
@@ -172,14 +166,10 @@ def main():
                         help='bam file containing remapped variants ')
     parser.add_argument('-o', '--outfile', type=str, required=True,
                         help='name of new file')
-    parser.add_argument('-f', '--flankingseqlength', type=int, required=True,
-                        help='length of each of the flanking sequences')
-    parser.add_argument('-s', '--scoreperc', type=float, required=True,
-                        help='the alignment score cut off percentage of flanking seq' 'length (keeps values strictly above)')
-    parser.add_argument('-d', '--difference_AS_XS', type=float, required=True,
-                        help='difference threshold % between AS and XS')
-    parser.add_argument('-x', '--max_alignment', type=int, required=True,
-                        help='the maximum number of alignment authorised for the reads to be kept')
+    parser.add_argument('-a', '--alignment_score_threshold', type=int, default=0,
+                        help='')
+    parser.add_argument('--filter_align_with_secondary', action='store_true', default=False,
+                        help='Filter out alignment that have one or several secondary alignments.')
     parser.add_argument('--newgenome', required=True,
                         help='FASTA file of the target genome')
     args = parser.parse_args()
@@ -187,11 +177,9 @@ def main():
     process_bam_file(
         bam_file_path=args.bam,
         output_file=args.outfile,
-        flank_length=args.flankingseqlength,
-        score_perc=args.scoreperc,
-        diff_AS_XS_perc=args.difference_AS_XS,
-        max_nb_alignment=args.max_alignment,
-        new_genome=args.newgenome
+        new_genome=args.newgenome,
+        filter_align_with_secondary=args.filter_align_with_secondary,
+        alignment_score_threshold=args.alignment_score_threshold
     )
 
 

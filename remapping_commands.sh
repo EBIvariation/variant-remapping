@@ -116,7 +116,7 @@ echo "#### Mapping results: ####"
 # -b: output in BAM format
 # -S: used to specifiy input is SAM format, but only in older versions of samtools
 
-bowtie2 -k 2 --np 0 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned.bam
+bowtie2 -k 2 --np 0 -f -x index "$TMPDIR"/variant_reads.out.fa | samtools view -bS - > "$TMPDIR"/reads_aligned_test.bam
 
 # Example output:
 # >1094 reads; of these:
@@ -131,7 +131,7 @@ echo '------------------------------3) Data extraction--------------------------
 # Extract chromosome, rsID, position on new genome, original variant allele, qual, filter and info fields, also 
 # creates old_ref_alleles.txt
 cd "$TMPDIR"
-samtools sort reads_aligned.bam -o reads_aligned.sorted.bam
+samtools sort reads_aligned_test.bam -o reads_aligned.sorted.bam
 samtools index reads_aligned.sorted.bam
 ../reverse_strand.py -i reads_aligned.sorted.bam -p old_ref_alleles.txt -o variants_remapped.vcf -f "$flankingseq"\
  -s "$scorecutoff" -d "$diffcutoff" 
