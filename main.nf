@@ -50,33 +50,6 @@ newgenome_fai = file("${params.newgenome}.fai")
 outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
 
-/*
-* Index the new reference genome using bowtie_build
-*/
-if (!file("${newgenome_dir}/${newgenome_basename}.1.bt2").exists()){
-
-    process bowtieGenomeIndex {
-        // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
-        memory Math.max(file(params.newgenome).size() * 10, 1073741824) + ' B'
-
-        publishDir newgenome_dir,
-            overwrite: false,
-            mode: "move"
-
-        input:
-            path "genome_fasta" from params.newgenome
-
-        output:
-            path "$newgenome_basename.*.bt2" 
-            val "done" into bt2_done
-
-        """
-        bowtie2-build genome_fasta $newgenome_basename
-        """
-    }
-} else {
-    bt2_done = Channel.value("done")
-}
 
 /*
 * Check that the fai index file for old genome exists and if it does not create it.
@@ -222,6 +195,8 @@ process flankingRegionBed {
  */
 process flankingRegionFasta {
 
+    memory '4 GB'
+
     input:  
         path "flanking.bed" from flanking_bed
         path "genome.fa" from params.oldgenome
@@ -291,27 +266,29 @@ process extractVariantInfoToFastaHeader {
 }
 
 /*
- * Align sequence with bowtie2
- */
-process alignWithBowtie {
+ * Align sequence with minimap2
+ */
+process alignWithMinimap {
 
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
     memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
 
     input:
         path "variant_reads.fa" from variant_reads_with_info
-        // This will get the directory containing the bowtie index linked in the directory
-        file 'bowtie_index' from newgenome_dir
-        // This ensures that bowtie index exists
-        val "unused" from bt2_done
+        // indexing is done on the fly so
+        path 'genome.fa' from params.newgenome
 
     output:
         path "reads_aligned.bam" into reads_aligned_bam
 
     """
-    bowtie2 -k 2 --np 0 -f -x bowtie_index/${newgenome_basename} variant_reads.fa | samtools view -bS - > reads_aligned.bam
+    # Options used by the 'sr' preset but allowing secondary alignments
+    minimap2 -k21 -w11 --sr --frag=yes -A2 -B8 -O12,32 -E2,1 -r50 -p.5 \
+             -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
+             -a genome.fa variant_reads.fa | samtools view -bS - > reads_aligned.bam
     """
 }
+
 
 
 /*
