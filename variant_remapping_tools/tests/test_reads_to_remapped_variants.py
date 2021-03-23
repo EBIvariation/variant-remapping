@@ -45,7 +45,8 @@ class TestProcess(TestCase):
         bamfile = self.get_test_resource("reads_aligned_test.bam")
         fasta_path = self.get_test_resource('new_genome.fa')
         output_file = '/tmp/remapped.vcf'
-        process_bam_file(bamfile, output_file, fasta_path, True, 0)
+        out_failed_file = '/tmp/unmapped.vcf'
+        process_bam_file(bamfile, output_file, out_failed_file, fasta_path, True, 0)
 
         expected = [
             'chr2	48	.	C	A	50	PASS	.\n',
@@ -57,7 +58,6 @@ class TestProcess(TestCase):
         ]
         with open(output_file, 'r') as vcf:
             for(i, line) in enumerate(vcf):
-                print(line)
                 assert line == expected[i]
             # Expected and Generated VCF have the same number of lines
             assert i+1 == len(expected)
