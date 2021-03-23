@@ -8,39 +8,41 @@ import pysam
 
 
 def reverse_complement(sequence):
-    return Seq(sequence, generic_dna).reverse_complement()
+    return str(Seq(sequence, generic_dna).reverse_complement())
 
 
-def calculate_new_variant_definition(read1, read2, ref_fasta):
+def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     """
     Resolve the variant definition from the flanking region alignment and old variant definition
+    TODO: Link to algorithm description once public
     """
     # grab information from the read name
-    name = read1.query_name
+    name = left_read.query_name
     info = name.split('|')
     old_ref = info[2]
     old_alts = info[3].split(',')
 
+    # Define new ref and new pos
+    new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
+                          right_read.pos - left_read.reference_end)
+    new_pos = left_read.reference_end + 1
+
     # 1. Handle reference strand change
-    if not read1.is_reverse and not read2.is_reverse and read1.pos < read2.pos:
+    if not left_read.is_reverse and not right_read.is_reverse:
         # Forward strand alignment
-        new_ref = fetch_bases(ref_fasta, read1.reference_name, read1.reference_end + 1, read2.pos - read1.reference_end)
-        new_pos = read1.reference_end + 1
         old_ref_conv = old_ref
         old_alt_conv = old_alts
 
-    elif read1.is_reverse and read2.is_reverse and read1.pos > read2.pos:
+    elif left_read.is_reverse and right_read.is_reverse:
         # Reverse strand alignment
-        new_ref = fetch_bases(ref_fasta, read1.reference_name, read2.reference_end + 1, read1.pos - read2.reference_end)
-        new_pos = read2.reference_end + 1
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
     else:
         error_msg = (f'Impossible read configuration: '
-                     f'read1 is_reverse: {read1.is_reverse}, '
-                     f'read2 is_reverse: {read2.is_reverse}, '
-                     f'read1 position: {read1.pos}, '
-                     f'read2 position: {read2.pos}')
+                     f'read1 is_reverse: {left_read.is_reverse}, '
+                     f'read2 is_reverse: {right_read.is_reverse}, '
+                     f'read1 position: {left_read.pos}, '
+                     f'read2 position: {right_read.pos}')
         print(error_msg)
         raise ValueError(error_msg)
 
@@ -58,7 +60,7 @@ def calculate_new_variant_definition(read1, read2, ref_fasta):
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
-        new_ref = fetch_bases(ref_fasta, new_pos, 1)
+        new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
 
     return new_pos, new_ref, new_alts
@@ -72,25 +74,6 @@ def fetch_bases(fasta, contig, start, length):
     end = zero_base_start + length
     new_ref = fasta.fetch(reference=contig, start=zero_base_start, end=end)
     return new_ref
-
-
-def calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand):
-    """Given allele and strand information, calculate the new (ref, alt) pair."""
-    # If reverse strand -> calculate complement
-    old_ref_processed = old_ref
-    old_alt_processed = old_alt
-    if is_reverse_strand:
-        old_ref_processed = Seq(old_ref_processed, generic_dna).reverse_complement()
-        old_alt_processed = Seq(old_alt_processed, generic_dna).reverse_complement()
-
-    # No changes
-    if old_ref_processed == new_ref:
-        return new_ref, old_alt_processed
-    # Ref and Alt are the same -> Alt changed to old Ref
-    if new_ref == old_alt_processed:
-        return new_ref, old_ref_processed
-    else:
-        return new_ref, old_alt_processed
 
 
 def group_reads(bam_file_path):
@@ -115,23 +98,34 @@ def group_reads(bam_file_path):
 
 
 def _order_reads(group):
-    """Order read in a group of two"""
+    """Order read and return the most 5' (smallest coordinates) first."""
     read1, read2 = group
-    if read1.is_read1 and read2.is_read2:
+    if read1.pos <= read2.pos:
         return read1, read2
     else:
         return read2, read1
 
 
-def pass_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
+def pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
+    """Test if the alignment """
     if filter_align_with_secondary and len(secondary_group):
         counter['Too many alignments'] += 1
-    elif len(primary_group) < 2 or all(read.is_unmapped for read in primary_group):
+    elif len(primary_group) < 2 or any(read.is_unmapped for read in primary_group):
         counter['Flank unmapped'] += 1
     elif len(set(read.reference_name for read in primary_group)) != 1:
         counter['Different chromosomes'] += 1
     elif any(read.get_tag('AS') <= int(alignment_score_threshold) for read in primary_group):
         counter['Poor alignment'] += 1
+    else:
+        return True
+    return False
+
+
+def pass_aligned_filtering(left_most_read, rightmost_read, counter):
+    if left_most_read.cigartuples[-1][1] == 'S' or rightmost_read.cigartuples[0][1] == 'S':
+        counter['Soft-clipped alignments'] += 1
+    elif left_most_read.reference_end > rightmost_read.pos:
+        counter['Overlapping alignment'] += 1
     else:
         return True
     return False
@@ -145,14 +139,18 @@ def process_bam_file(bam_file_path, output_file, new_genome, filter_align_with_s
     with open(output_file, 'w') as outfile:
         for primary_group, secondary_group in group_reads(bam_file_path):
             counter['total'] += 1
-            if pass_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
-                read1, read2 = _order_reads(primary_group)
-                varpos, new_ref, new_alts = calculate_new_variant_definition(read1, read2, fasta)
-                info = read1.query_name.split('|')
-                outfile.write(
-                    '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read1.reference_name, varpos, info[4], new_ref,
-                                                          ','.join(new_alts), info[5], info[6], info[7]))
-    for metric in ['Too many alignments', 'Flank unmapped', 'Different chromosomes', 'Poor alignment']:
+            if pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary,
+                                    alignment_score_threshold):
+                left_read, right_read = _order_reads(primary_group)
+                if pass_aligned_filtering(left_read, right_read, counter):
+                    counter['Remapped'] += 1
+                    varpos, new_ref, new_alts = calculate_new_variant_definition(left_read, right_read, fasta)
+                    info = left_read.query_name.split('|')
+                    outfile.write(
+                        '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
+                                                              ','.join(new_alts), info[5], info[6], info[7]))
+    for metric in ['Too many alignments', 'Flank unmapped', 'Different chromosomes',
+                   'Poor alignment', 'Overlapping alignment', 'Soft-clipped alignments', 'Remapped']:
         print(f'{counter.get(metric, 0)} ({counter.get(metric, 0)/counter.get("total"):.2%}) variants rejected for {metric}')
 
 
@@ -168,10 +166,9 @@ def main():
                         help='name of new file')
     parser.add_argument('-a', '--alignment_score_threshold', type=int, default=0,
                         help='')
-    parser.add_argument('--filter_align_with_secondary', action='store_true', default=False,
+    parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignment that have one or several secondary alignments.')
-    parser.add_argument('--newgenome', required=True,
-                        help='FASTA file of the target genome')
+    parser.add_argument('-n', '--newgenome', required=True, help='Fasta file of the target genome')
     args = parser.parse_args()
 
     process_bam_file(

@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 import pysam
 from unittest import TestCase
-from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, calculate_new_alleles, process_bam_file, \
+from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, process_bam_file, \
     calculate_new_variant_definition
 
 
@@ -31,20 +31,6 @@ class TestProcess(TestCase):
         assert fetch_bases(fasta=fasta, contig='chr2', start=1404, length=1) == 'G'
         assert fetch_bases(fasta=fasta, contig='chr2', start=1818, length=3) == 'AAC'
         assert fetch_bases(fasta=fasta, contig='chr2', start=2030, length=1) == 'A'
-
-    def test_calculate_new_alleles(self):
-        # No changes
-        assert calculate_new_alleles(old_ref='A', new_ref='A', old_alt='C', is_reverse_strand=False) == ('A', 'C')
-        # Alignment reverse strand
-        assert calculate_new_alleles(old_ref='A', new_ref='T', old_alt='C', is_reverse_strand=True) == ('T', 'G')
-        # Allele changes
-        assert calculate_new_alleles(old_ref='A', new_ref='C', old_alt='C', is_reverse_strand=False) == ('C', 'A')
-        # Alignment reverse strand and allele change
-        assert calculate_new_alleles(old_ref='A', new_ref='G', old_alt='C', is_reverse_strand=True) == ('G', 'T')
-        # Insertion with no allele changes
-        assert calculate_new_alleles(old_ref='A', new_ref='A', old_alt='TCC', is_reverse_strand=False) == ('A', 'TCC')
-        # Deletion with no allele changes
-        assert calculate_new_alleles(old_ref='AAC', new_ref='AAC', old_alt='T', is_reverse_strand=False) == ('AAC', 'T')
 
     def test_process_bam_file(self):
         """
@@ -80,38 +66,38 @@ class TestProcess(TestCase):
         fasta = 'fasta_path'
 
         # Forward strand alignment for SNP
-        read1 = Mock(query_name='chr1|48|C|A', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
-        read2 = Mock(query_name='chr1|48|C|A', reference_name='chr2', pos=48, reference_end=108, is_reverse=False)
+        left_read = Mock(query_name='chr1|48|C|A', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
+        right_read = Mock(query_name='chr1|48|C|A', reference_name='chr2', pos=48, reference_end=108, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
-            assert calculate_new_variant_definition(read1, read2, fasta) == (48, 'C', ['A'])
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A'])
 
         # Reverse strand alignment for SNP
-        read1 = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', pos=48, reference_end=108, is_reverse=True)
-        read2 = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
+        left_read = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
+        right_read = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', pos=48, reference_end=108, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='G'):
-            assert calculate_new_variant_definition(read1, read2, fasta) == (48, 'G', ['T', 'A'])
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'G', ['T', 'A'])
 
         # Forward strand alignment for SNP with novel allele
-        read1 = Mock(query_name='chr1|48|T|A', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
-        read2 = Mock(query_name='chr1|48|T|A', reference_name='chr2', pos=48, reference_end=108, is_reverse=False)
+        left_read = Mock(query_name='chr1|48|T|A', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
+        right_read = Mock(query_name='chr1|48|T|A', reference_name='chr2', pos=48, reference_end=108, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
-            assert calculate_new_variant_definition(read1, read2, fasta) == (48, 'C', ['A', 'T'])
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A', 'T'])
 
         # Forward strand alignment for Deletion
-        read1 = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
-        read2 = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=False)
+        left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
+        right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='CAA'):
-            assert calculate_new_variant_definition(read1, read2, fasta) == (48, 'CAA', ['C'])
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'CAA', ['C'])
 
         # Reverse strand alignment for Deletion
         # REF       AAAAAAAAAAAAAAAAATTGCCCCCCCCCCCCCCCCC
         #             read2                       read1
         #    <-----------------------TTG<-----------------------
         #                            G
-        read1 = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=True)
-        read2 = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
+        left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
+        right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='TTG'):
-            assert calculate_new_variant_definition(read1, read2, fasta) == (48, 'TTG', ['G'])
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'TTG', ['G'])
 
 
     @staticmethod

@@ -300,7 +300,7 @@ process alignWithMinimap {
 
     """
     # Options used by the 'sr' preset but allowing secondary alignments
-    minimap2 -k21 -w11 --sr --frag=yes -A2 -B8 -O12,32 -E2,1 -r50 -p.5 \
+    minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 --end-bonus 10 -O12,32 -E2,1 -r50 -p.5 -z 800,200\
              -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
              -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
     """
