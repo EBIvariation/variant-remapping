@@ -1,5 +1,11 @@
 #!/usr/bin/env nextflow
 
+
+// Enable syntax extension
+// See https://www.nextflow.io/docs/latest/dsl2.html
+nextflow.enable.dsl=2
+
+
 def helpMessage() {
     log.info"""
     Process a VCF file containing SNV or short indels associated with the old genome to remap the variant's coordinates to the new genome.
@@ -320,12 +326,13 @@ process readsToRemappedVariants {
 
     output:
         path "variants_remapped.vcf" into variants_remapped
+        path "variants_unmapped.vcf" into variants_unmapped
 
     """
     # Ensure that we will use the reads_to_remapped_variants.py from this repo
     ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
         -o variants_remapped.vcf  --filter_align_with_secondary \
-        --newgenome genome.fa
+        --newgenome genome.fa --out_failed_file variants_unmapped.vcf
     """
 }
 

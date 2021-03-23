@@ -131,12 +131,17 @@ def pass_aligned_filtering(left_most_read, rightmost_read, counter):
     return False
 
 
-def process_bam_file(bam_file_path, output_file, new_genome, filter_align_with_secondary, alignment_score_threshold):
+def output_failed_alignment(primary_group, outfile):
+    info = primary_group[0].query_name.split('|')
+    print('\t'.join(info), file=outfile)
+
+
+def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary, alignment_score_threshold):
 
     # Calculate the score cutoff based on flanking seq length
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
-    with open(output_file, 'w') as outfile:
+    with open(output_file, 'w') as outfile, open(out_failed_file, 'w') as out_failed:
         for primary_group, secondary_group in group_reads(bam_file_path):
             counter['total'] += 1
             if pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary,
@@ -149,6 +154,10 @@ def process_bam_file(bam_file_path, output_file, new_genome, filter_align_with_s
                     outfile.write(
                         '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
                                                               ','.join(new_alts), info[5], info[6], info[7]))
+                else:
+                    output_failed_alignment(primary_group, out_failed)
+            else:
+                output_failed_alignment(primary_group, out_failed)
     for metric in ['Too many alignments', 'Flank unmapped', 'Different chromosomes',
                    'Poor alignment', 'Overlapping alignment', 'Soft-clipped alignments', 'Remapped']:
         print(f'{counter.get(metric, 0)} ({counter.get(metric, 0)/counter.get("total"):.2%}) variants rejected for {metric}')
@@ -163,7 +172,9 @@ def main():
     parser.add_argument('-i', '--bam', type=str, required=True,
                         help='bam file containing remapped variants ')
     parser.add_argument('-o', '--outfile', type=str, required=True,
-                        help='name of new file')
+                        help='name of new  VCF file')
+    parser.add_argument('--out_failed_file', type=str, required=True,
+                        help='name of the file containing reads that did not align correctly')
     parser.add_argument('-a', '--alignment_score_threshold', type=int, default=0,
                         help='')
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
@@ -174,6 +185,7 @@ def main():
     process_bam_file(
         bam_file_path=args.bam,
         output_file=args.outfile,
+        out_failed_file=args.out_failed_file,
         new_genome=args.newgenome,
         filter_align_with_secondary=args.filter_align_with_secondary,
         alignment_score_threshold=args.alignment_score_threshold
