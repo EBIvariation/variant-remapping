@@ -4,9 +4,9 @@ channels:
   - defaults
 dependencies:
   - bedtools=2.29.2
-  - bowtie2=2.4.1
+  - minimap2=2.1
   - samtools=1.9
   - bcftools=1.9
   - bedops=2.4.39
   - tabix=0.2.6
-  - nextflow=20.04.1
+  - nextflow=20.07.1
