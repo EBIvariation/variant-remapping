@@ -44,7 +44,6 @@ def is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
     """
     if read.is_secondary:  # We only want to deal with primary reads
         return False
-    counter['total'] += 1
     if read.is_unmapped:  # Can be decoded with bitwise flag with & 4 (4 means unmapped)
         counter['unmapped'] += 1
         return False
@@ -104,33 +103,53 @@ def calculate_new_alleles(old_ref, new_ref, old_alt, is_reverse_strand):
         return new_ref, old_alt_processed
 
 
-def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_AS_XS_perc, new_genome):
-    bamfile = pysam.AlignmentFile(bam_file_path, 'rb')
+def group_reads(bam_file_path):
+    with pysam.AlignmentFile(bam_file_path, 'rb') as inbam:
+        current_read_name = None
+        current_reads = []
+        for read in inbam:
+            if read.query_name == current_read_name:
+                current_reads.append(read)
+            else:
+                if current_read_name:
+                    yield current_reads
+                current_reads = [read]
+            current_read_name = read.query_name
+        yield current_reads
+
+
+def process_bam_file(bam_file_path, output_file, flank_length, score_perc, diff_AS_XS_perc, max_nb_alignment,
+                     new_genome):
 
     # Calculate the score cutoff based on flanking seq length
     score_cutoff = -(flank_length * score_perc)
     diff_cutoff = flank_length * diff_AS_XS_perc
     counter = Counter()
-
     fasta = pysam.FastaFile(new_genome)
     with open(output_file, 'w') as outfile:
-        for read in bamfile:
-            if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
-                varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
-                if is_local_alignment_perfect(counter, perf_counter, local_region_size):
-                    name = read.query_name
-                    info = name.split('|')
-                    old_ref = info[2]
-                    old_alt = info[3]
+        for read_group in group_reads(bam_file_path):
+            if len(read_group) <= max_nb_alignment:
+                counter['total'] += 1
+                for read in read_group:
+                    if is_read_valid(read, counter, flank_length, score_cutoff, diff_cutoff):
+                        varpos, perf_counter, local_region_size = calculate_variant_position(read, flank_length)
+                        if is_local_alignment_perfect(counter, perf_counter, local_region_size):
+                            name = read.query_name
+                            info = name.split('|')
+                            old_ref = info[2]
+                            old_alt = info[3]
 
-                    new_ref = fetch_bases(fasta, read.reference_name, len(old_ref), varpos)
-                    new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, read.is_reverse)
+                            new_ref = fetch_bases(fasta, read.reference_name, len(old_ref), varpos)
+                            new_ref, new_alt = calculate_new_alleles(old_ref, new_ref, old_alt, read.is_reverse)
 
-                    outfile.write(
-                        '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
-                                                              info[5], info[6], info[7]))
+                            outfile.write(
+                                '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (read.reference_name, varpos, info[4], new_ref, new_alt,
+                                                                  info[5], info[6], info[7]))
+            else:
+                counter['Too many alignments'] += 1
 
     print(counter['total'])
+    print(counter['Too many alignments'])
     print(counter['unmapped'])
     print(counter['primary_poor'])
     print(counter['gap_small'])
@@ -149,13 +168,20 @@ def main():
         'everything to a new file\n')
 
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('-i', '--bam', help='bam file containing remapped variants ')
-    parser.add_argument('-o', '--outfile', help='name of new file')
-    parser.add_argument('-f', '--flankingseqlength', type=int, help='length of each of the flanking sequences')
-    parser.add_argument('-s', '--scoreperc', type=float,
+    parser.add_argument('-i', '--bam', type=str, required=True,
+                        help='bam file containing remapped variants ')
+    parser.add_argument('-o', '--outfile', type=str, required=True,
+                        help='name of new file')
+    parser.add_argument('-f', '--flankingseqlength', type=int, required=True,
+                        help='length of each of the flanking sequences')
+    parser.add_argument('-s', '--scoreperc', type=float, required=True,
                         help='the alignment score cut off percentage of flanking seq' 'length (keeps values strictly above)')
-    parser.add_argument('-d', '--difference_AS_XS', type=float, help='difference threshold % between AS and XS')
-    parser.add_argument('--newgenome', help='FASTA file of the target genome')
+    parser.add_argument('-d', '--difference_AS_XS', type=float, required=True,
+                        help='difference threshold % between AS and XS')
+    parser.add_argument('-x', '--max_alignment', type=int, required=True,
+                        help='the maximum number of alignment authorised for the reads to be kept')
+    parser.add_argument('--newgenome', required=True,
+                        help='FASTA file of the target genome')
     args = parser.parse_args()
 
     process_bam_file(
@@ -164,6 +190,7 @@ def main():
         flank_length=args.flankingseqlength,
         score_perc=args.scoreperc,
         diff_AS_XS_perc=args.difference_AS_XS,
+        max_nb_alignment=args.max_alignment,
         new_genome=args.newgenome
     )
 
