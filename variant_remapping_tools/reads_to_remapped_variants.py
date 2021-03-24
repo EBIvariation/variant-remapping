@@ -16,7 +16,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     Resolve the variant definition from the flanking region alignment and old variant definition
     TODO: Link to algorithm description once public
     """
-    # grab information from the read name
+    # Grab information from the read name
     name = left_read.query_name
     info = name.split('|')
     old_ref = info[2]
@@ -32,7 +32,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         # Forward strand alignment
         old_ref_conv = old_ref
         old_alt_conv = old_alts
-
     elif left_read.is_reverse and right_read.is_reverse:
         # Reverse strand alignment
         old_ref_conv = reverse_complement(old_ref)

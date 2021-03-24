@@ -223,6 +223,4 @@ workflow {
         mergeHeaderAndContent(buildHeader.out.final_header, sortVCF.out.variants_remapped_sorted)
         normalise(mergeHeaderAndContent.out.final_vcf_with_header, params.newgenome)
         calculateStats(normalise.out.final_output_vcf)
-
-
 }

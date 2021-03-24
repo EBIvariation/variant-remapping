@@ -89,11 +89,11 @@ class TestProcess(TestCase):
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='CAA'):
             assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'CAA', ['C'])
 
-        # Reverse strand alignment for Deletion
-        # REF       AAAAAAAAAAAAAAAAATTGCCCCCCCCCCCCCCCCC
-        #             read2                       read1
-        #    <-----------------------TTG<-----------------------
-        #                            G
+        # Reverse strand alignment for a deletion
+        # REF  AAAAAAAAAAAAAAAAATTGCCCCCCCCCCCCCCCCC
+        #            read 2             read 1
+        #      <----------------TTG<----------------
+        #                       G
         left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
         right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='TTG'):
@@ -113,4 +113,3 @@ class TestProcess(TestCase):
         resource_directory = os.path.dirname(os.path.dirname(module_directory)) + '/tests'
         # Full path to the requested resource.
         return os.path.join(resource_directory, 'resources', resource_name)
-

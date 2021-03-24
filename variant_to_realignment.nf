@@ -7,7 +7,7 @@ nextflow.enable.dsl=2
 
 
 /*
- * Convert VCF file to bed format
+ * Convert the VCF file to BED format.
  */
 process ConvertVCFToBed {
 
