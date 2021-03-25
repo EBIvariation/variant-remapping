@@ -99,22 +99,6 @@ include { process_split_reads; process_split_reads_with_bowtie } from './variant
 
 
 /*
- * Sort VCF file
- */
-process sortVCF {
-
-    input:
-        path "variants_remapped.vcf"
-
-    output:
-        path "variants_remapped_sorted.vcf", emit: variants_remapped_sorted
-
-    """
-    cat variants_remapped.vcf | awk '\$1 ~ /^#/ {print \$0;next} {print \$0 | "sort -k1,1 -k2,2n"}' > variants_remapped_sorted.vcf
-    """
-}
-
-/*
  * Create the header for the output VCF
  */
 process buildHeader {
@@ -161,6 +145,24 @@ process mergeHeaderAndContent {
 }
 
 /*
+ * Sort VCF file
+ */
+process sortVCF {
+
+    input:
+        path "variants_remapped.vcf"
+
+    output:
+        path "variants_remapped_sorted.vcf.gz", emit: variants_remapped_sorted_gz
+
+    """
+    bgzip variants_remapped.vcf
+    tabix variants_remapped.vcf.gz
+    bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
+    """
+}
+
+/*
  * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
  */
 process normalise {
@@ -170,15 +172,14 @@ process normalise {
         mode: "copy"
 
     input:
-        path "vcf_out_with_header.vcf"
+        path "variants_remapped_sorted.vcf.gz"
         path "genome.fa"
 
     output:
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bgzip -c vcf_out_with_header.vcf > vcf_out_with_header.vcf.gz
-    bcftools norm -c ws -f genome.fa -N vcf_out_with_header.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm -c ws -f genome.fa -N variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
@@ -217,10 +218,10 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
-        sortVCF(process_split_reads.out.variants_remapped)
-        buildHeader(sortVCF.out.variants_remapped_sorted, StoreVCFHeader.out.vcf_header)
-        mergeHeaderAndContent(buildHeader.out.final_header, sortVCF.out.variants_remapped_sorted)
-        normalise(mergeHeaderAndContent.out.final_vcf_with_header, params.newgenome)
+        buildHeader(process_split_reads.out.variants_remapped, StoreVCFHeader.out.vcf_header)
+        mergeHeaderAndContent(buildHeader.out.final_header, process_split_reads.out.variants_remapped)
+        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
         calculateStats(normalise.out.final_output_vcf)
 }
 
@@ -240,9 +241,9 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        sortVCF(process_split_reads_with_bowtie.out.variants_remapped)
-        buildHeader(sortVCF.out.variants_remapped_sorted, StoreVCFHeader.out.vcf_header)
-        mergeHeaderAndContent(buildHeader.out.final_header, sortVCF.out.variants_remapped_sorted)
-        normalise(mergeHeaderAndContent.out.final_vcf_with_header, params.newgenome)
+        buildHeader(process_split_reads_with_bowtie.out.variants_remapped, StoreVCFHeader.out.vcf_header)
+        mergeHeaderAndContent(buildHeader.out.final_header, process_split_reads_with_bowtie.out.variants_remapped)
+        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
         calculateStats(normalise.out.final_output_vcf)
 }
