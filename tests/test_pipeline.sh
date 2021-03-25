@@ -37,6 +37,7 @@ chr2	98	.	C	CG	50	PASS	.
 chr2	1078	.	A	G	50	PASS	.
 chr2	1818	.	AAC	A	50	PASS	.
 chr2	2030	.	A	TCC	50	PASS	.
+chr2	3509	.	T	C	50	PASS	.
 EOT
 
 # Compare vs the expected VCF

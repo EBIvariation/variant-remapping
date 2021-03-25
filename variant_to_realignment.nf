@@ -31,6 +31,7 @@ process flankingRegionBed {
     input:
         path "variants.bed"
         path "genome.chrom.sizes"
+        val flankingseq
 
     output:
         path "flanking_r1.bed", emit: flanking_r1_bed
@@ -39,10 +40,10 @@ process flankingRegionBed {
     script:
     """
     awk 'BEGIN{OFS="\t"}{\$2=\$2-1;\$3=\$3-1; print \$0}' variants.bed \
-        | bedtools slop  -g genome.chrom.sizes -l $params.flankingseq -r 0  > flanking_r1.bed
+        | bedtools slop  -g genome.chrom.sizes -l $flankingseq -r 0  > flanking_r1.bed
 
     awk 'BEGIN{OFS="\t"}{\$2=\$2+length(\$6);\$3=\$3+length(\$6); print \$0}' variants.bed \
-        | bedtools slop  -g genome.chrom.sizes -l 0 -r $params.flankingseq  > flanking_r2.bed
+        | bedtools slop  -g genome.chrom.sizes -l 0 -r $flankingseq  > flanking_r2.bed
     """
 }
 
@@ -148,16 +149,23 @@ process alignWithMinimap {
         path "variant_read2.fa"
         // indexing is done on the fly so get the genome directly
         path 'genome.fa'
+        val flanklength
 
     output:
         path "reads_aligned.bam", emit: reads_aligned_bam
 
     """
-    # Options used by the 'sr' preset but allowing secondary alignments
+    # Options used by the 'sr' preset with some modifications:
+    # -O6,16 instead of -O12,32 --> reduce indel cost
+    # -B5 instead of -B10 --> reduce mismatch cost
+    # --end-bonus 20  --> bonus score when the end of the read aligns to mimic global alignment.
+    # --secondary=yes -N 2 --> allow up to 2 secondary alignments
     minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
              -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
              -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
     """
+
+
 }
 
 /*
@@ -217,7 +225,7 @@ workflow process_split_reads {
 
     main:
         ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes)
+        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, 50)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
@@ -229,7 +237,8 @@ workflow process_split_reads {
         alignWithMinimap(
             extractVariantInfoToFastaHeader.out.variant_read1_with_info,
             extractVariantInfoToFastaHeader.out.variant_read2_with_info,
-            new_genome_fa
+            new_genome_fa,
+            50
         )
         readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa)
 
@@ -237,6 +246,41 @@ workflow process_split_reads {
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
 }
+
+
+workflow process_split_reads_mid {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+
+    main:
+        ConvertVCFToBed(source_vcf)
+        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, 2000)
+        flankingRegionFasta(
+            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
+            old_genome_fa, old_genome_fa_fai
+        )
+        extractVariantInfoToFastaHeader(
+            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
+            flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
+        )
+        alignWithMinimap(
+            extractVariantInfoToFastaHeader.out.variant_read1_with_info,
+            extractVariantInfoToFastaHeader.out.variant_read2_with_info,
+            new_genome_fa, 2000
+        )
+        readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa)
+
+    emit:
+        variants_remapped = readsToRemappedVariants.out.variants_remapped
+        variants_unmapped = readsToRemappedVariants.out.variants_unmapped
+}
+
+
 
 workflow process_split_reads_with_bowtie {
     take:

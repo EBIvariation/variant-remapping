@@ -24,7 +24,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
 
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
-                          right_read.pos - left_read.reference_end)
+                          right_read.reference_start - left_read.reference_end)
     new_pos = left_read.reference_end + 1
 
     # TODO: All th operation bellow should be recorded so they can be used for subsequent changes of the genotypes.
@@ -41,8 +41,8 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         error_msg = (f'Impossible read configuration: '
                      f'read1 is_reverse: {left_read.is_reverse}, '
                      f'read2 is_reverse: {right_read.is_reverse}, '
-                     f'read1 position: {left_read.pos}, '
-                     f'read2 position: {right_read.pos}')
+                     f'read1 position: {left_read.reference_start}, '
+                     f'read2 position: {right_read.reference_start}')
         print(error_msg)
         raise ValueError(error_msg)
 
@@ -62,6 +62,9 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
+    print(left_read.reference_start, len(left_read.seq), left_read.reference_start + len(left_read.seq))
+    print(left_read.reference_end)
+    print(old_ref, old_alts)
 
     return new_pos, new_ref, new_alts
 
@@ -107,7 +110,7 @@ def group_reads(bam_file_path):
 def _order_reads(group):
     """Order read and return the most 5' (smallest coordinates) first."""
     read1, read2 = group
-    if read1.pos <= read2.pos:
+    if read1.reference_start <= read2.reference_start:
         return read1, read2
     else:
         return read2, read1
@@ -140,7 +143,7 @@ def pass_aligned_filtering(left_read, right_read, counter):
     """
     if left_read.cigartuples[-1][1] == 'S' or right_read.cigartuples[0][1] == 'S':
         counter['Soft-clipped alignments'] += 1
-    elif left_read.reference_end > right_read.pos:
+    elif left_read.reference_end > right_read.reference_start:
         counter['Overlapping alignment'] += 1
     else:
         return True
@@ -152,7 +155,7 @@ def output_failed_alignment(primary_group, outfile):
     Output the original VCF entry when alignment have failed to pass all thresholds
     """
     info = primary_group[0].query_name.split('|')
-    print('\t'.join(info), file=outfile)
+    print('\t'.join(info[:2] + [info[4]] + info[2:4] + info[5:]), file=outfile)
 
 
 def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary, alignment_score_threshold):

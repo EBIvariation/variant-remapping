@@ -95,7 +95,7 @@ process storeVCFHeader {
 }
 
 include { prepare_old_genome; prepare_new_genome; prepare_new_genome_bowtie } from './prepare_genome.nf'
-include { process_split_reads; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
+include { process_split_reads; process_split_reads_mid; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
 
 
 /*
@@ -203,6 +203,19 @@ process calculateStats {
     """
 }
 
+process combineVCF {
+    input:
+        path "variants1.vcf"
+        path "variants2.vcf"
+
+    output:
+        path "merge.vcf", emit: merge_vcf
+
+    """
+    cat variants1.vcf variants2.vcf > merge.vcf
+    """
+}
+
 // Take variants remapped to the new genome and merge them back with the original header and sort the output
 workflow finalise {
     take:
@@ -234,7 +247,16 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
-        finalise(process_split_reads.out.variants_remapped, storeVCFHeader.out.vcf_header)
+        process_split_reads_mid(
+            process_split_reads.out.variants_unmapped,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome.out.genome_fai
+        )
+        combineVCF(process_split_reads.out.variants_remapped, process_split_reads_mid.out.variants_remapped)
+        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header)
 }
 
 //process_with_bowtie
