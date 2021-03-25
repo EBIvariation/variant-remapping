@@ -94,9 +94,8 @@ process StoreVCFHeader {
     """
 }
 
-include { prepare_old_genome; prepare_new_genome } from './prepare_genome.nf'
-include { process_split_reads } from './variant_to_realignment.nf'
-
+include { prepare_old_genome; prepare_new_genome; prepare_new_genome_bowtie } from './prepare_genome.nf'
+include { process_split_reads; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
 
 
 /*
@@ -203,7 +202,7 @@ process calculateStats {
     """
 }
 
-
+//process_with_minimap
 workflow {
     main:
         prepare_old_genome(params.oldgenome)
@@ -219,6 +218,29 @@ workflow {
             prepare_new_genome.out.genome_fai
         )
         sortVCF(process_split_reads.out.variants_remapped)
+        buildHeader(sortVCF.out.variants_remapped_sorted, StoreVCFHeader.out.vcf_header)
+        mergeHeaderAndContent(buildHeader.out.final_header, sortVCF.out.variants_remapped_sorted)
+        normalise(mergeHeaderAndContent.out.final_vcf_with_header, params.newgenome)
+        calculateStats(normalise.out.final_output_vcf)
+}
+
+//process_with_bowtie
+workflow process_with_bowtie {
+    main:
+        prepare_old_genome(params.oldgenome)
+        prepare_new_genome_bowtie(params.newgenome)
+        uncompressInputVCF(params.vcffile)
+        StoreVCFHeader(uncompressInputVCF.out.vcf_file)
+        process_split_reads_with_bowtie(
+            uncompressInputVCF.out.vcf_file,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome_bowtie.out.genome_fai,
+            prepare_new_genome_bowtie.out.bowtie_indexes
+        )
+        sortVCF(process_split_reads_with_bowtie.out.variants_remapped)
         buildHeader(sortVCF.out.variants_remapped_sorted, StoreVCFHeader.out.vcf_header)
         mergeHeaderAndContent(buildHeader.out.final_header, sortVCF.out.variants_remapped_sorted)
         normalise(mergeHeaderAndContent.out.final_vcf_with_header, params.newgenome)

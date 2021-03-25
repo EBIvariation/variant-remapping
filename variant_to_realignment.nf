@@ -161,6 +161,30 @@ process alignWithMinimap {
 }
 
 /*
+ * Align sequence with bowtie2
+ */
+process alignWithBowtie {
+
+    // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
+    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
+
+    input:
+        path "variant_read1.fa"
+        path "variant_read2.fa"
+        // This will get all the index files named as they were placed in a subdirectory
+        file "bowtie_index/*"
+
+    output:
+        path "reads_aligned.bam", emit: reads_aligned_bam
+
+
+    """
+    bowtie2 -k 2 --end-to-end --np 0 -f -x bowtie_index/bowtie_index -1 variant_read1.fa -2 variant_read2.fa | samtools view -bS - > reads_aligned.bam
+    """
+}
+
+
+/*
  * Take the reads and process them to get the remapped variants
  *
  */
@@ -213,3 +237,38 @@ workflow process_split_reads {
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
 }
+
+workflow process_split_reads_with_bowtie {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+        new_genome_bowtie_index
+
+    main:
+        ConvertVCFToBed(source_vcf)
+        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes)
+        flankingRegionFasta(
+            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
+            old_genome_fa, old_genome_fa_fai
+        )
+        extractVariantInfoToFastaHeader(
+            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
+            flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
+        )
+        alignWithBowtie(
+            extractVariantInfoToFastaHeader.out.variant_read1_with_info,
+            extractVariantInfoToFastaHeader.out.variant_read2_with_info,
+            new_genome_bowtie_index
+        )
+        readsToRemappedVariants(alignWithBowtie.out.reads_aligned_bam, new_genome_fa)
+
+    emit:
+        variants_remapped = readsToRemappedVariants.out.variants_remapped
+        variants_unmapped = readsToRemappedVariants.out.variants_unmapped
+}
+
+

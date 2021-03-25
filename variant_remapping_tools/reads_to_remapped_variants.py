@@ -174,7 +174,7 @@ def main():
                         help='name of new  VCF file')
     parser.add_argument('--out_failed_file', type=str, required=True,
                         help='name of the file containing reads that did not align correctly')
-    parser.add_argument('-a', '--alignment_score_threshold', type=int, default=0,
+    parser.add_argument('-a', '--alignment_score_threshold', type=int, default=-1,
                         help='')
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignment that have one or several secondary alignments.')

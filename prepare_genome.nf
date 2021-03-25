@@ -4,6 +4,27 @@
 // See https://www.nextflow.io/docs/latest/dsl2.html
 nextflow.enable.dsl=2
 
+
+
+/*
+* Index the new reference genome using bowtie_build
+*/
+process bowtieGenomeIndex {
+    // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
+    memory Math.max(file(params.newgenome).size() * 10, 1073741824) + ' B'
+
+    input:
+        path "genome_fasta"
+
+    output:
+        path "bowtie_index.*.bt2", emit: bowtie_indexes
+
+    """
+    bowtie2-build genome_fasta bowtie_index
+    """
+}
+
+
 process samtoolsFaidx {
 
     input:
@@ -50,7 +71,19 @@ workflow prepare_new_genome {
         genome
     main:
         samtoolsFaidx(genome)
+        bowtieGenomeIndex(genome)
     emit:
         genome_fai = samtoolsFaidx.out.genome_fai
+}
 
+
+workflow prepare_new_genome_bowtie {
+    take:
+        genome
+    main:
+        samtoolsFaidx(genome)
+        bowtieGenomeIndex(genome)
+    emit:
+        genome_fai = samtoolsFaidx.out.genome_fai
+        bowtie_indexes = bowtieGenomeIndex.out.bowtie_indexes
 }
