@@ -71,7 +71,6 @@ workflow prepare_new_genome {
         genome
     main:
         samtoolsFaidx(genome)
-        bowtieGenomeIndex(genome)
     emit:
         genome_fai = samtoolsFaidx.out.genome_fai
 }
