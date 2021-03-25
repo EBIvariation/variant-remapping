@@ -27,6 +27,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
                           right_read.pos - left_read.reference_end)
     new_pos = left_read.reference_end + 1
 
+    # TODO: All th operation bellow should be recorded so they can be used for subsequent changes of the genotypes.
     # 1. Handle reference strand change
     if not left_read.is_reverse and not right_read.is_reverse:
         # Forward strand alignment
