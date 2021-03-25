@@ -77,6 +77,13 @@ def fetch_bases(fasta, contig, start, length):
 
 
 def group_reads(bam_file_path):
+    """
+    This function assumes that the reads are sorted by query name.
+    It will group reads by query name and create two subgroups of primary and secondary aligned reads.
+    It returns an iterators where each element is a tuple of two lists
+    :param bam_file_path: the name sorted bam file
+    :return: iterator of tuples containing two lists
+    """
     with pysam.AlignmentFile(bam_file_path, 'rb') as inbam:
         current_read_name = None
         primary_group = None
@@ -107,7 +114,8 @@ def _order_reads(group):
 
 
 def pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
-    """Test if the alignment """
+    """Test if the alignment pass basic filtering such as presence of secondary alignments, any primary unmapped,
+    primary mapped on different chromosome, or primary mapped poorly."""
     if filter_align_with_secondary and len(secondary_group):
         counter['Too many alignments'] += 1
     elif len(primary_group) < 2 or any(read.is_unmapped for read in primary_group):
@@ -121,10 +129,18 @@ def pass_basic_filtering(primary_group, secondary_group, counter, filter_align_w
     return False
 
 
-def pass_aligned_filtering(left_most_read, rightmost_read, counter):
-    if left_most_read.cigartuples[-1][1] == 'S' or rightmost_read.cigartuples[0][1] == 'S':
+def pass_aligned_filtering(left_read, right_read, counter):
+    """
+    Test if the two reads pass the additional filters such as check for soft-clipped end next to the variant region,
+    or overlapping region between the two reads.
+    :param left_read: the left (or 5') most read
+    :param right_read: the right (or 3') most read
+    :param counter: Counter to report the number of reads filtered.
+    :return: True or False
+    """
+    if left_read.cigartuples[-1][1] == 'S' or right_read.cigartuples[0][1] == 'S':
         counter['Soft-clipped alignments'] += 1
-    elif left_most_read.reference_end > rightmost_read.pos:
+    elif left_read.reference_end > right_read.pos:
         counter['Overlapping alignment'] += 1
     else:
         return True
@@ -132,6 +148,9 @@ def pass_aligned_filtering(left_most_read, rightmost_read, counter):
 
 
 def output_failed_alignment(primary_group, outfile):
+    """
+    Output the original VCF entry when alignment have failed to pass all thresholds
+    """
     info = primary_group[0].query_name.split('|')
     print('\t'.join(info), file=outfile)
 
@@ -164,9 +183,9 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
 
 
 def main():
-    description = (
-        'Reverses the allele for variants that got mapped onto the reverse strand of the new genome, and prints'
-        'everything to a new file\n')
+    description = ('Process alignment results in bam format to determine the location of the variant in the new genome.'
+                   ' Each variant will be either output in the new genome VCF or the old VCF will be output in a '
+                   'separate file.')
 
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', '--bam', type=str, required=True,
