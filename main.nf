@@ -203,7 +203,23 @@ process calculateStats {
     """
 }
 
+// Take variants remapped to the new genome and merge them back with the original header and sort the output
+workflow finalise {
+    take:
+        variants_remapped
+        vcf_header
+
+    main:
+        buildHeader(variants_remapped, vcf_header)
+        mergeHeaderAndContent(buildHeader.out.final_header, variants_remapped)
+        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
+        calculateStats(normalise.out.final_output_vcf)
+}
+
+
 //process_with_minimap
+// Workflow without a name is the default workflow that gets executed when the file is run through nextflow
 workflow {
     main:
         prepare_old_genome(params.oldgenome)
@@ -218,11 +234,7 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
-        buildHeader(process_split_reads.out.variants_remapped, StoreVCFHeader.out.vcf_header)
-        mergeHeaderAndContent(buildHeader.out.final_header, process_split_reads.out.variants_remapped)
-        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
-        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
-        calculateStats(normalise.out.final_output_vcf)
+        finalise(process_split_reads.out.variants_remapped, StoreVCFHeader.out.vcf_header)
 }
 
 //process_with_bowtie
@@ -241,9 +253,5 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        buildHeader(process_split_reads_with_bowtie.out.variants_remapped, StoreVCFHeader.out.vcf_header)
-        mergeHeaderAndContent(buildHeader.out.final_header, process_split_reads_with_bowtie.out.variants_remapped)
-        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
-        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
-        calculateStats(normalise.out.final_output_vcf)
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, StoreVCFHeader.out.vcf_header)
 }
