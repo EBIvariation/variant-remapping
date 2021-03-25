@@ -1,7 +1,8 @@
 name: variant-remapping
 channels:
-  - bioconda
   - defaults
+  - conda-forge
+  - bioconda
 dependencies:
   - bedtools=2.29.2
   - minimap2=2.1
@@ -9,4 +10,3 @@ dependencies:
   - bcftools=1.9
   - bedops=2.4.39
   - tabix=0.2.6
-  - nextflow=20.07.1
