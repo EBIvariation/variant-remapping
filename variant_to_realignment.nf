@@ -173,7 +173,22 @@ process alignWithMinimap {
                  --secondary=yes -N 2 \
                  -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
         """
+}
 
+/*
+ * Sort BAM file by name
+ */
+process sortByName {
+
+    input:
+        path "reads_aligned.bam"
+
+    output:
+        path "reads_aligned_name_sorted.bam", emit: reads_aligned_sorted_bam
+
+    """
+    samtools sort -n -O BAM -o reads_aligned_name_sorted.bam reads_aligned.bam
+    """
 }
 
 /*
@@ -252,7 +267,8 @@ workflow process_split_reads {
             new_genome_fa,
             flank_length
         )
-        readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa, flank_length)
+        sortByName(alignWithMinimap.out.reads_aligned_bam)
+        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length)
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
@@ -287,8 +303,8 @@ workflow process_split_reads_mid {
             extractVariantInfoToFastaHeader.out.variant_read2_with_info,
             new_genome_fa, flank_length
         )
-        readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa, flank_length)
-
+        sortByName(alignWithMinimap.out.reads_aligned_bam)
+        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length)
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
@@ -322,7 +338,8 @@ workflow process_split_reads_long {
             extractVariantInfoToFastaHeader.out.variant_read2_with_info,
             new_genome_fa, flank_length
         )
-        readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa, flank_length)
+        sortByName(alignWithMinimap.out.reads_aligned_bam)
+        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length)
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped

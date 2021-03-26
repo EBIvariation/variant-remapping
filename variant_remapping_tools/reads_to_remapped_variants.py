@@ -39,14 +39,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         # Reverse strand alignment
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
-    else:
-        error_msg = (f'Impossible read configuration: '
-                     f'read1 is_reverse: {left_read.is_reverse}, '
-                     f'read2 is_reverse: {right_read.is_reverse}, '
-                     f'read1 position: {left_read.reference_start}, '
-                     f'read2 position: {right_read.reference_start}')
-        print(error_msg)
-        raise ValueError(error_msg)
 
     # 2. Assign new allele sequences
     if new_ref == old_ref_conv:
@@ -147,6 +139,8 @@ def pass_aligned_filtering(left_read, right_read, counter):
         counter['Soft-clipped alignments'] += 1
     elif left_read.reference_end > right_read.reference_start:
         counter['Overlapping alignment'] += 1
+    elif left_read.is_reverse != right_read.is_reverse:
+        counter['Unexpected orientation'] += 1
     else:
         return True
     return False
