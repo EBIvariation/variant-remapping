@@ -62,9 +62,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
-    print(left_read.reference_start, len(left_read.seq), left_read.reference_start + len(left_read.seq))
-    print(left_read.reference_end)
-    print(old_ref, old_alts)
 
     return new_pos, new_ref, new_alts
 
@@ -91,20 +88,24 @@ def group_reads(bam_file_path):
         current_read_name = None
         primary_group = None
         secondary_group = None
+        supplementary_group = None
         for read in inbam:
             if read.query_name == current_read_name:
                 pass
             else:
                 if current_read_name:
-                    yield primary_group, secondary_group
+                    yield primary_group, supplementary_group, secondary_group
                 primary_group = []
                 secondary_group = []
+                supplementary_group = []
             if read.is_secondary:
                 secondary_group.append(read)
+            elif read.is_supplementary:
+                supplementary_group.append(read)
             else:
                 primary_group.append(read)
             current_read_name = read.query_name
-        yield primary_group, secondary_group
+        yield primary_group, supplementary_group, secondary_group
 
 
 def _order_reads(group):
@@ -116,7 +117,7 @@ def _order_reads(group):
         return read2, read1
 
 
-def pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary, alignment_score_threshold):
+def pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary):
     """Test if the alignment pass basic filtering such as presence of secondary alignments, any primary unmapped,
     primary mapped on different chromosome, or primary mapped poorly."""
     if filter_align_with_secondary and len(secondary_group):
@@ -125,8 +126,6 @@ def pass_basic_filtering(primary_group, secondary_group, counter, filter_align_w
         counter['Flank unmapped'] += 1
     elif len(set(read.reference_name for read in primary_group)) != 1:
         counter['Different chromosomes'] += 1
-    elif any(read.get_tag('AS') <= int(alignment_score_threshold) for read in primary_group):
-        counter['Poor alignment'] += 1
     else:
         return True
     return False
@@ -158,16 +157,13 @@ def output_failed_alignment(primary_group, outfile):
     print('\t'.join(info[:2] + [info[4]] + info[2:4] + info[5:]), file=outfile)
 
 
-def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary, alignment_score_threshold):
-
-    # Calculate the score cutoff based on flanking seq length
+def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary):
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
     with open(output_file, 'w') as outfile, open(out_failed_file, 'w') as out_failed:
-        for primary_group, secondary_group in group_reads(bam_file_path):
+        for primary_group, supplementary_group, secondary_group in group_reads(bam_file_path):
             counter['total'] += 1
-            if pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary,
-                                    alignment_score_threshold):
+            if pass_basic_filtering(primary_group, secondary_group, counter, filter_align_with_secondary):
                 left_read, right_read = _order_reads(primary_group)
                 if pass_aligned_filtering(left_read, right_read, counter):
                     counter['Remapped'] += 1
@@ -196,8 +192,6 @@ def main():
                         help='Output VCF file with remapped variants')
     parser.add_argument('--out_failed_file', type=str, required=True,
                         help='Name of the file containing reads that did not align correctly')
-    parser.add_argument('-a', '--alignment_score_threshold', type=int, default=-1,
-                        help='Minimum alignment score (AS) to consider the read properly mapped')
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignments that have one or several secondary alignments.')
     parser.add_argument('-n', '--newgenome', required=True, help='FASTA file of the target genome')
@@ -208,8 +202,7 @@ def main():
         output_file=args.outfile,
         out_failed_file=args.out_failed_file,
         new_genome=args.newgenome,
-        filter_align_with_secondary=args.filter_align_with_secondary,
-        alignment_score_threshold=args.alignment_score_threshold
+        filter_align_with_secondary=args.filter_align_with_secondary
     )
 
 

@@ -46,7 +46,7 @@ class TestProcess(TestCase):
         fasta_path = self.get_test_resource('new_genome.fa')
         output_file = '/tmp/remapped.vcf'
         out_failed_file = '/tmp/unmapped.vcf'
-        process_bam_file(bamfile, output_file, out_failed_file, fasta_path, True, 0)
+        process_bam_file(bamfile, output_file, out_failed_file, fasta_path, True)
 
         expected = [
             'chr2	48	.	C	A	50	PASS	.\n',
@@ -66,26 +66,26 @@ class TestProcess(TestCase):
         fasta = 'fasta_path'
 
         # Forward strand alignment for SNP
-        left_read = Mock(query_name='chr1|48|C|A', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
-        right_read = Mock(query_name='chr1|48|C|A', reference_name='chr2', pos=48, reference_end=108, is_reverse=False)
+        left_read = Mock(query_name='chr1|48|C|A', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
+        right_read = Mock(query_name='chr1|48|C|A', reference_name='chr2', reference_start=48, reference_end=108, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
             assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A'])
 
         # Reverse strand alignment for SNP
-        left_read = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
-        right_read = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', pos=48, reference_end=108, is_reverse=True)
+        left_read = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=True)
+        right_read = Mock(query_name='chr1|48|C|A,T', reference_name='chr2', reference_start=48, reference_end=108, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='G'):
             assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'G', ['T', 'A'])
 
         # Forward strand alignment for SNP with novel allele
-        left_read = Mock(query_name='chr1|48|T|A', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
-        right_read = Mock(query_name='chr1|48|T|A', reference_name='chr2', pos=48, reference_end=108, is_reverse=False)
+        left_read = Mock(query_name='chr1|48|T|A', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
+        right_read = Mock(query_name='chr1|48|T|A', reference_name='chr2', reference_start=48, reference_end=108, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
             assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A', 'T'])
 
         # Forward strand alignment for Deletion
-        left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=False)
-        right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=False)
+        left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
+        right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=50, reference_end=110, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='CAA'):
             assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'CAA', ['C'])
 
@@ -94,8 +94,8 @@ class TestProcess(TestCase):
         #            read 2             read 1
         #      <----------------TTG<----------------
         #                       G
-        left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=1, reference_end=47, is_reverse=True)
-        right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', pos=50, reference_end=110, is_reverse=True)
+        left_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=True)
+        right_read = Mock(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=50, reference_end=110, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='TTG'):
             assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'TTG', ['G'])
 

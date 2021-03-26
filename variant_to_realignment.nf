@@ -97,8 +97,8 @@ process extractVariantInfoToFastaHeader {
     // Disable the string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
     '''
-    # Store variant positions
-    cut -f 1,3 flanking_r1.bed > position.txt
+    # Store variant positions (Add + 1 to revert to one based position)
+    awk '{print $1"\t"$3 + 1}' flanking_r1.bed > position.txt
 
     # Store ref bases
     cut -f 6 flanking_r1.bed > old_ref_bases.txt
@@ -148,23 +148,31 @@ process alignWithMinimap {
         path "variant_read1.fa"
         path "variant_read2.fa"
         // indexing is done on the fly so get the genome directly
-        path 'genome.fa'
+        path "genome.fa"
         val flanklength
 
     output:
         path "reads_aligned.bam", emit: reads_aligned_bam
 
-    """
-    # Options used by the 'sr' preset with some modifications:
-    # -O6,16 instead of -O12,32 --> reduce indel cost
-    # -B5 instead of -B10 --> reduce mismatch cost
-    # --end-bonus 20  --> bonus score when the end of the read aligns to mimic global alignment.
-    # --secondary=yes -N 2 --> allow up to 2 secondary alignments
-    minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
-             -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
-             -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
-    """
 
+    script:
+    if (flanklength < 500)
+        """
+        # Options used by the 'sr' preset with some modifications:
+        # -O6,16 instead of -O12,32 --> reduce indel cost
+        # -B5 instead of -B10 --> reduce mismatch cost
+        # --end-bonus 20  --> bonus score when the end of the read aligns to mimic global alignment.
+        # --secondary=yes -N 2 --> allow up to 2 secondary alignments
+        minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
+                 -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
+                 -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+        """
+    else if (flanklength < 10000)
+        """
+        minimap2 -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
+                 --secondary=yes -N 2 \
+                 -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+        """
 
 }
 

@@ -157,7 +157,6 @@ process sortVCF {
 
     """
     bgzip variants_remapped.vcf
-    tabix variants_remapped.vcf.gz
     bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
     """
 }
@@ -221,12 +220,13 @@ workflow finalise {
     take:
         variants_remapped
         vcf_header
+        genome
 
     main:
         buildHeader(variants_remapped, vcf_header)
         mergeHeaderAndContent(buildHeader.out.final_header, variants_remapped)
         sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
-        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, genome)
         calculateStats(normalise.out.final_output_vcf)
 }
 
@@ -256,7 +256,7 @@ workflow {
             prepare_new_genome.out.genome_fai
         )
         combineVCF(process_split_reads.out.variants_remapped, process_split_reads_mid.out.variants_remapped)
-        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header)
+        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header, params.newgenome)
 }
 
 //process_with_bowtie
@@ -275,5 +275,5 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header)
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header, params.newgenome)
 }
