@@ -106,7 +106,7 @@ process extractVariantInfoToFastaHeader {
     cut -f 4 flanking_r1.bed > rsIDs.txt
 
     # Store variant bases
-    cut -f 7  flanking_r1.bed > variant_bases.txt
+    cut -f 7 flanking_r1.bed > variant_bases.txt
 
     # Store the other vcf columns
     cut -f 5,8,9 flanking_r1.bed > qual_filt_info.txt
@@ -270,5 +270,3 @@ workflow process_split_reads_with_bowtie {
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
 }
-
-

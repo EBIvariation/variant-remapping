@@ -179,7 +179,7 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
                 output_failed_alignment(primary_group, out_failed)
     for metric in ['Too many alignments', 'Flank unmapped', 'Different chromosomes',
                    'Poor alignment', 'Overlapping alignment', 'Soft-clipped alignments', 'Remapped']:
-        print(f'{counter.get(metric, 0)} ({counter.get(metric, 0)/counter.get("total"):.2%}) variants rejected for {metric}')
+        print(f'{counter[metric]} ({counter[metric]/counter["total"]:.2%}) variants rejected for {metric}')
 
 
 def main():
@@ -189,16 +189,16 @@ def main():
 
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     parser.add_argument('-i', '--bam', type=str, required=True,
-                        help='bam file containing remapped variants ')
+                        help='Input BAM file with remapped flanking regions')
     parser.add_argument('-o', '--outfile', type=str, required=True,
-                        help='name of new  VCF file')
+                        help='Output VCF file with remapped variants')
     parser.add_argument('--out_failed_file', type=str, required=True,
-                        help='name of the file containing reads that did not align correctly')
+                        help='Name of the file containing reads that did not align correctly')
     parser.add_argument('-a', '--alignment_score_threshold', type=int, default=-1,
-                        help='')
+                        help='Minimum alignment score (AS) to consider the read properly mapped')
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
-                        help='Filter out alignment that have one or several secondary alignments.')
-    parser.add_argument('-n', '--newgenome', required=True, help='Fasta file of the target genome')
+                        help='Filter out alignments that have one or several secondary alignments.')
+    parser.add_argument('-n', '--newgenome', required=True, help='FASTA file of the target genome')
     args = parser.parse_args()
 
     process_bam_file(

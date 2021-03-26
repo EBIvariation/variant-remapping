@@ -5,7 +5,6 @@
 nextflow.enable.dsl=2
 
 
-
 /*
 * Index the new reference genome using bowtie_build
 */
