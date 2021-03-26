@@ -107,7 +107,8 @@ def group_reads(bam_file_path):
             else:
                 primary_group.append(read)
             current_read_name = read.query_name
-        yield primary_group, supplementary_group, secondary_group
+        if primary_group:
+            yield primary_group, supplementary_group, secondary_group
 
 
 def _order_reads(group):
@@ -179,9 +180,6 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
                     output_failed_alignment(primary_group, out_failed)
             else:
                 output_failed_alignment(primary_group, out_failed)
-    for metric in counter.keys() - {'total'}:
-        print(f'{counter[metric]} ({counter[metric]/counter["total"]:.2%}) variants rejected for {metric}')
-
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
 

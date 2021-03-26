@@ -95,7 +95,7 @@ process storeVCFHeader {
 }
 
 include { prepare_old_genome; prepare_new_genome; prepare_new_genome_bowtie } from './prepare_genome.nf'
-include { process_split_reads; process_split_reads_mid; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
+include { process_split_reads; process_split_reads_mid; process_split_reads_long; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
 
 
 /*
@@ -206,12 +206,14 @@ process combineVCF {
     input:
         path "variants1.vcf"
         path "variants2.vcf"
+        path "variants3.vcf"
+
 
     output:
         path "merge.vcf", emit: merge_vcf
 
     """
-    cat variants1.vcf variants2.vcf > merge.vcf
+    cat variants1.vcf variants2.vcf variants3.vcf > merge.vcf
     """
 }
 
@@ -219,12 +221,13 @@ process combineYaml {
     input:
         path "round1.yml"
         path "round2.yml"
+        path "round3.yml"
 
     output:
         path "merge.yml", emit: merge_yml
 
     """
-    cat round1.yml round2.yml > merge.yml
+    cat round1.yml round2.yml round3.yml > merge.yml
     """
 }
 
@@ -269,8 +272,25 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
-        combineVCF(process_split_reads.out.variants_remapped, process_split_reads_mid.out.variants_remapped)
-        combineYaml(process_split_reads.out.summary_yml, process_split_reads_mid.out.summary_yml)
+        process_split_reads_long(
+            process_split_reads_mid.out.variants_unmapped,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome.out.genome_fai
+        )
+        combineVCF(
+            process_split_reads.out.variants_remapped,
+            process_split_reads_mid.out.variants_remapped,
+            process_split_reads_long.out.variants_remapped
+        )
+        combineYaml(
+            process_split_reads.out.summary_yml,
+            process_split_reads_mid.out.summary_yml,
+            process_split_reads_long.out.summary_yml,
+        )
+
         finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header, params.newgenome, combineYaml.out.merge_yml)
 }
 

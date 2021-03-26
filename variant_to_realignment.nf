@@ -167,7 +167,7 @@ process alignWithMinimap {
                  -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
                  -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
         """
-    else if (flanklength < 10000)
+    else
         """
         minimap2 -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
                  --secondary=yes -N 2 \
@@ -296,6 +296,39 @@ workflow process_split_reads_mid {
 }
 
 
+workflow process_split_reads_long {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+
+    main:
+        flank_length = 50000
+        ConvertVCFToBed(source_vcf)
+        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
+        flankingRegionFasta(
+            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
+            old_genome_fa, old_genome_fa_fai
+        )
+        extractVariantInfoToFastaHeader(
+            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
+            flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
+        )
+        alignWithMinimap(
+            extractVariantInfoToFastaHeader.out.variant_read1_with_info,
+            extractVariantInfoToFastaHeader.out.variant_read2_with_info,
+            new_genome_fa, flank_length
+        )
+        readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa, flank_length)
+
+    emit:
+        variants_remapped = readsToRemappedVariants.out.variants_remapped
+        variants_unmapped = readsToRemappedVariants.out.variants_unmapped
+        summary_yml = readsToRemappedVariants.out.summary_yml
+}
 
 workflow process_split_reads_with_bowtie {
     take:
