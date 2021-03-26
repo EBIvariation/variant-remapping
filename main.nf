@@ -1,5 +1,11 @@
 #!/usr/bin/env nextflow
 
+
+// Enable syntax extension
+// See https://www.nextflow.io/docs/latest/dsl2.html
+nextflow.enable.dsl=2
+
+
 def helpMessage() {
     log.info"""
     Process a VCF file containing SNV or short indels associated with the old genome to remap the variant's coordinates to the new genome.
@@ -51,107 +57,15 @@ outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
 
 /*
-* Index the new reference genome using bowtie_build
-*/
-if (!file("${newgenome_dir}/${newgenome_basename}.1.bt2").exists()){
-
-    process bowtieGenomeIndex {
-        // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
-        memory Math.max(file(params.newgenome).size() * 10, 1073741824) + ' B'
-
-        publishDir newgenome_dir,
-            overwrite: false,
-            mode: "move"
-
-        input:
-            path "genome_fasta" from params.newgenome
-
-        output:
-            path "$newgenome_basename.*.bt2" 
-            val "done" into bt2_done
-
-        """
-        bowtie2-build genome_fasta $newgenome_basename
-        """
-    }
-} else {
-    bt2_done = Channel.value("done")
-}
-
-/*
-* Check that the fai index file for old genome exists and if it does not create it.
-* Once created the publishDir directive will place it in the location described by the oldgenome_fai variable
-*/
-if (!oldgenome_fai.exists()){
-    process samtoolsFaidxOld {
-
-        publishDir oldgenome_dir,
-            overwrite: false,
-            mode: "copy"
-
-        input:
-            path "${oldgenome_basename}" from params.oldgenome
-
-        output:
-            path "${oldgenome_basename}.fai" into oldgenome_fai
-
-        """
-        samtools faidx ${oldgenome_basename}
-        """
-    }
-}
-
-/*
-* Check that the fai index file for new genome exists and if it does not create it.
-* Once created the publishDir directive will place it in the location described by the newgenome_fai variable
-*/
-if (!newgenome_fai.exists()){
-    process samtoolsFaidxNew {
-
-        publishDir newgenome_dir,
-            overwrite: false,
-            mode: "copy"
-
-        input:
-            path "${newgenome_basename}" from params.newgenome
-
-        output:
-            path "${newgenome_basename}.fai" into newgenome_fai
-
-        """
-        samtools faidx ${newgenome_basename}
-        """
-    }
-}
-
-/*
- * Extract chomosome/contig sizes
- */
-process chromSizes {
-
-    input:
-        path "genome.fa.fai" from oldgenome_fai
-
-
-    output:
-        path "genome.fa.chrom.sizes" into oldgenome_chrom_sizes
-
-    """
-    cut -f1,2 genome.fa.fai > genome.fa.chrom.sizes 
-    """
-} 
-
-
-/*
  * Uncompress VCF file
  */
 process uncompressInputVCF {
 
     input:
-        path "source.vcf" from params.vcffile
+        path "source.vcf"
 
     output:
-        path "uncompressed.vcf" into vcf_file
+        path "uncompressed.vcf", emit: vcf_file
 
     script:
         if ( file(params.vcffile).getExtension() == 'gz' )
@@ -163,194 +77,26 @@ process uncompressInputVCF {
             ln -nfs source.vcf uncompressed.vcf
             """
 }
+
 /*
  * Store the original VCF header for later use
  */
-process StoreVCFHeader {
+process storeVCFHeader {
 
     input:
-        path "source.vcf" from vcf_file
+        path "source.vcf"
 
     output:
-        path "vcf_header.txt" into vcf_header
+        path "vcf_header.txt", emit: vcf_header
 
     """
     bcftools view --header-only source.vcf | grep -v '^##FORMAT' >  vcf_header.txt
     """
 }
 
-/*
- * Convert VCF file to bed format
- */
-process ConvertVCFToBed {
+include { prepare_old_genome; prepare_new_genome; prepare_new_genome_bowtie } from './prepare_genome.nf'
+include { process_split_reads; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
 
-    input:
-        path "source.vcf" from vcf_file
-
-    output:
-        path "variants.bed" into variants_bed
-
-    """
-    vcf2bed < source.vcf > variants.bed
-    """
-}
-
-/*
- * Based on variants BED, generate the flanking regions BED.
- */
-process flankingRegionBed {
-
-    input:
-        path "variants.bed" from variants_bed
-        path "genome.chrom.sizes" from oldgenome_chrom_sizes
-
-    output:
-        path "flanking.filtered.bed" into flanking_bed
-
-    script:
-    readlength = params.flankingseq * 2 + 1
-    """
-    bedtools slop -i variants.bed -g genome.chrom.sizes -b ${params.flankingseq} > flanking.bed
-    # Check if the intervals are less than the required length (2*flanking length + 1): this filters out reads that aren't 
-    # the correct number of bases long (origin: variant too close to the start or end of the chromosome)
-    awk  '(\$3 - \$2 == $readlength){print \$0}' flanking.bed > flanking.filtered.bed
-    """
-}
-
-/*
- * Extract the actual flanking region in fasta format.
- */
-process flankingRegionFasta {
-
-    input:  
-        path "flanking.bed" from flanking_bed
-        path "genome.fa" from params.oldgenome
-        path "genome.fa.fai" from oldgenome_fai
-    
-    output:
-        path "variants_reads.fa" into variants_reads
-
-    '''
-    # Get the fasta sequences for these intervals
-    bedtools getfasta -fi genome.fa -bed flanking.bed -fo variants_reads.fa
-
-    # Replace the colon separators with "|":
-    # Storing this information for later on in the script when we split the name by "|" to extract the relevant 
-    # information (ALT allele, QUAL, FILT, INFO)
-    # This is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
-    # chosen
-    sed -i 's/:/|/' variants_reads.fa
-    '''
-}
-
-/*
- * Extract information about the original variants and put it in the fasta header
- */
-process extractVariantInfoToFastaHeader {
-
-    input:  
-        path "flanking.bed" from flanking_bed
-        path "variants_reads.fa" from variants_reads
-    
-    output:
-        path "variant_reads.out.fa" into variant_reads_with_info
-
-    // Disable the string interpolation using single quotes
-    // https://www.nextflow.io/docs/latest/script.html#string-interpolation
-    '''
-    # Store ref bases
-    cut -f 6 flanking.bed > old_ref_bases.txt
-
-    # Store rsIDs
-    cut -f 4 flanking.bed > rsIDs.txt
-
-    # Store variant bases
-    cut -f 7  flanking.bed > variant_bases.txt
-
-    # Store the other vcf columns
-    cut -f 5,8,9 flanking.bed > qual_filt_info.txt
-
-    # Paste the names, variant bases, then fasta sequences into a new file
-    paste <(grep '^>' variants_reads.fa) old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-    <(grep -v '^>' variants_reads.fa) > temp.txt
-
-    # Reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
-    # command is a bit ugly
-    # Input:
-    # >[chr]|[pos interval]   [REF]       [ALT]       [rsID]    [QUAL] [FILT] [INFO]      [seq]
-    # Replace all spaces and tabs with "|":
-    # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]|[seq]
-    # Replace the last "|" with a space (this is between the header and the sequence):
-    # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO] [seq]
-    # And finally replace the space with a newline:
-    # Output:
-    # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]
-    # [seq]
-    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp.txt | tr ' ' '\\n' > variant_reads.out.fa
-    '''
-}
-
-/*
- * Align sequence with bowtie2
- */
-process alignWithBowtie {
-
-    // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
-
-    input:
-        path "variant_reads.fa" from variant_reads_with_info
-        // This will get the directory containing the bowtie index linked in the directory
-        file 'bowtie_index' from newgenome_dir
-        // This ensures that bowtie index exists
-        val "unused" from bt2_done
-
-    output:
-        path "reads_aligned.bam" into reads_aligned_bam
-
-    """
-    bowtie2 -k 2 --np 0 -f -x bowtie_index/${newgenome_basename} variant_reads.fa | samtools view -bS - > reads_aligned.bam
-    """
-}
-
-
-/*
- * Take the reads and process them to get the remapped variants
- *
- */
-process readsToRemappedVariants {
-
-    input:
-        path "reads_aligned.bam" from reads_aligned_bam
-        path "genome.fa" from params.newgenome
-
-    output:
-        path "variants_remapped.vcf" into variants_remapped
-
-    """
-    # Ensure that we will use the reads_to_remapped_variants.py from this repo
-    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
-        -o variants_remapped.vcf -f $params.flankingseq \
-        -s $params.scorecutoff -d $params.diffcutoff --max_alignment 1 \
-        --newgenome genome.fa
-    """
-}
-
-/*
- * Sort VCF file
- */
-process sortVCF {
-
-    input:
-        path "variants_remapped.vcf" from variants_remapped
-
-    output:
-        path "variants_remapped_sorted.vcf" into variants_remapped_sorted
-
-    """
-    cat variants_remapped.vcf | awk '\$1 ~ /^#/ {print \$0;next} {print \$0 | "sort -k1,1 -k2,2n"}' > variants_remapped_sorted.vcf
-    """
-}
 
 /*
  * Create the header for the output VCF
@@ -358,11 +104,11 @@ process sortVCF {
 process buildHeader {
 
     input:
-        path "variants_remapped_sorted.vcf" from variants_remapped_sorted
-        path "vcf_header.txt" from vcf_header
+        path "variants_remapped_sorted.vcf"
+        path "vcf_header.txt"
 
     output:
-        path "final_header.txt" into final_header
+        path "final_header.txt", emit: final_header
 
     """
     # Create list of contigs/chromosomes to be added to the header
@@ -370,7 +116,7 @@ process buildHeader {
     while read CHR; do echo "##contig=<ID=\${CHR}>"; done < contig_names.txt > contigs.txt
     # Add the reference assembly
     echo "##reference=${params.newgenome}" >> contigs.txt
-    
+
     # Copy everything that isn't #CHROM (the column titles), ##contig or ##reference from the old header to a temp
     awk '(\$1 !~ /^##contig/ && \$1 !~ /^##reference/ && \$1 !~ /^#CHROM/) {print \$0}' vcf_header.txt > temp_header.txt
 
@@ -386,15 +132,33 @@ process buildHeader {
 process mergeHeaderAndContent {
 
     input:
-        path "final_header.txt" from final_header
-        path "variants_remapped_sorted.vcf" from variants_remapped_sorted
+        path "final_header.txt"
+        path "variants_remapped_sorted.vcf"
 
     output:
-        path "vcf_out_with_header.vcf" into final_vcf_with_header
+        path "vcf_out_with_header.vcf", emit: final_vcf_with_header
 
     """
     # Add header to the vcf file:
     cat final_header.txt variants_remapped_sorted.vcf > vcf_out_with_header.vcf
+    """
+}
+
+/*
+ * Sort VCF file
+ */
+process sortVCF {
+
+    input:
+        path "variants_remapped.vcf"
+
+    output:
+        path "variants_remapped_sorted.vcf.gz", emit: variants_remapped_sorted_gz
+
+    """
+    bgzip variants_remapped.vcf
+    tabix variants_remapped.vcf.gz
+    bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
     """
 }
 
@@ -408,15 +172,14 @@ process normalise {
         mode: "copy"
 
     input:
-        path "genome.fa" from params.newgenome
-        path "vcf_out_with_header.vcf" from final_vcf_with_header
+        path "variants_remapped_sorted.vcf.gz"
+        path "genome.fa"
 
     output:
-        path "${outfile_basename}" into final_output_vcf        
+        path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bgzip -c vcf_out_with_header.vcf > vcf_out_with_header.vcf.gz
-    bcftools norm -c ws -f genome.fa -N vcf_out_with_header.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm -c ws -f genome.fa -N variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
@@ -430,12 +193,65 @@ process calculateStats {
         mode: "copy"
 
     input:
-        path outfile_basename from final_output_vcf
+        path outfile_basename
 
     output:
         path "${outfile_basename}.stats"
-        
+
     """
     bcftools stats ${outfile_basename} > ${outfile_basename}.stats
     """
+}
+
+// Take variants remapped to the new genome and merge them back with the original header and sort the output
+workflow finalise {
+    take:
+        variants_remapped
+        vcf_header
+
+    main:
+        buildHeader(variants_remapped, vcf_header)
+        mergeHeaderAndContent(buildHeader.out.final_header, variants_remapped)
+        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
+        calculateStats(normalise.out.final_output_vcf)
+}
+
+
+//process_with_minimap
+// Workflow without a name is the default workflow that gets executed when the file is run through nextflow
+workflow {
+    main:
+        prepare_old_genome(params.oldgenome)
+        prepare_new_genome(params.newgenome)
+        uncompressInputVCF(params.vcffile)
+        storeVCFHeader(uncompressInputVCF.out.vcf_file)
+        process_split_reads(
+            uncompressInputVCF.out.vcf_file,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome.out.genome_fai
+        )
+        finalise(process_split_reads.out.variants_remapped, storeVCFHeader.out.vcf_header)
+}
+
+//process_with_bowtie
+workflow process_with_bowtie {
+    main:
+        prepare_old_genome(params.oldgenome)
+        prepare_new_genome_bowtie(params.newgenome)
+        uncompressInputVCF(params.vcffile)
+        storeVCFHeader(uncompressInputVCF.out.vcf_file)
+        process_split_reads_with_bowtie(
+            uncompressInputVCF.out.vcf_file,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome_bowtie.out.genome_fai,
+            prepare_new_genome_bowtie.out.bowtie_indexes
+        )
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header)
 }
