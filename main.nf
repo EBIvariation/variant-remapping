@@ -185,20 +185,20 @@ process normalise {
 /*
  * Create file containing remapping stats
  */
-process calculateStats {
+process outputStats {
 
     publishDir outfile_dir,
         overwrite: true,
         mode: "copy"
 
     input:
-        path outfile_basename
+        path "summary"
 
     output:
-        path "${outfile_basename}.stats"
+        path "${outfile_basename}.yml"
 
     """
-    bcftools stats ${outfile_basename} > ${outfile_basename}.stats
+    ln -s summary "${outfile_basename}.yml"
     """
 }
 
@@ -215,19 +215,33 @@ process combineVCF {
     """
 }
 
+process combineYaml {
+    input:
+        path "round1.yml"
+        path "round2.yml"
+
+    output:
+        path "merge.yml", emit: merge_yml
+
+    """
+    cat round1.yml round2.yml > merge.yml
+    """
+}
+
 // Take variants remapped to the new genome and merge them back with the original header and sort the output
 workflow finalise {
     take:
         variants_remapped
         vcf_header
         genome
+        summary
 
     main:
         buildHeader(variants_remapped, vcf_header)
         mergeHeaderAndContent(buildHeader.out.final_header, variants_remapped)
         sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
         normalise(sortVCF.out.variants_remapped_sorted_gz, genome)
-        calculateStats(normalise.out.final_output_vcf)
+        outputStats(summary)
 }
 
 
@@ -256,7 +270,8 @@ workflow {
             prepare_new_genome.out.genome_fai
         )
         combineVCF(process_split_reads.out.variants_remapped, process_split_reads_mid.out.variants_remapped)
-        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header, params.newgenome)
+        combineYaml(process_split_reads.out.summary_yml, process_split_reads_mid.out.summary_yml)
+        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header, params.newgenome, combineYaml.out.merge_yml)
 }
 
 //process_with_bowtie
@@ -275,5 +290,5 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header, params.newgenome)
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header, params.newgenome,  process_split_reads_with_bowtie.out.merge_yml)
 }

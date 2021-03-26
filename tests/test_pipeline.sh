@@ -26,7 +26,7 @@ nextflow run ${SOURCE_DIR}/main.nf \
 
 # Check the presence of the output file
 ls ${SCRIPT_DIR}/resources/remap.vcf \
-   ${SCRIPT_DIR}/resources/remap.vcf.stats
+   ${SCRIPT_DIR}/resources/remap.vcf.yml
 
 # Build the expected VCF
 cat << EOT > "${SCRIPT_DIR}/resources/expected_remap.vcf"

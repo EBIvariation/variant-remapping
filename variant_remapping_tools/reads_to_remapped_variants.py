@@ -2,6 +2,8 @@
 import argparse
 from argparse import RawTextHelpFormatter
 from collections import Counter
+
+import yaml
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 import pysam
@@ -157,7 +159,8 @@ def output_failed_alignment(primary_group, outfile):
     print('\t'.join(info[:2] + [info[4]] + info[2:4] + info[5:]), file=outfile)
 
 
-def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary):
+def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary,
+                     flank_length, summary_file):
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
     with open(output_file, 'w') as outfile, open(out_failed_file, 'w') as out_failed:
@@ -179,6 +182,9 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
     for metric in counter.keys() - {'total'}:
         print(f'{counter[metric]} ({counter[metric]/counter["total"]:.2%}) variants rejected for {metric}')
 
+    with open(summary_file, 'w') as open_summary:
+        yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
+
 
 def main():
     description = ('Process alignment results in bam format to determine the location of the variant in the new genome.'
@@ -192,6 +198,11 @@ def main():
                         help='Output VCF file with remapped variants')
     parser.add_argument('--out_failed_file', type=str, required=True,
                         help='Name of the file containing reads that did not align correctly')
+    parser.add_argument('--flank_length', type=int, required=True,
+                        help='Length of the flanking region used.')
+    parser.add_argument('--summary', type=str, required=True,
+                        help='Yaml files containing the summary metrics')
+
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignments that have one or several secondary alignments.')
     parser.add_argument('-n', '--newgenome', required=True, help='FASTA file of the target genome')
@@ -202,7 +213,9 @@ def main():
         output_file=args.outfile,
         out_failed_file=args.out_failed_file,
         new_genome=args.newgenome,
-        filter_align_with_secondary=args.filter_align_with_secondary
+        filter_align_with_secondary=args.filter_align_with_secondary,
+        flank_length=args.flank_length,
+        summary_file=args.summary
     )
 
 
