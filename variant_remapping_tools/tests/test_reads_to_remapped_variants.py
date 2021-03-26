@@ -45,8 +45,9 @@ class TestProcess(TestCase):
         bamfile = self.get_test_resource("reads_aligned_test.bam")
         fasta_path = self.get_test_resource('new_genome.fa')
         output_file = '/tmp/remapped.vcf'
+        summary_file = '/tmp/summary.yml'
         out_failed_file = '/tmp/unmapped.vcf'
-        process_bam_file(bamfile, output_file, out_failed_file, fasta_path, True)
+        process_bam_file(bamfile, output_file, out_failed_file, fasta_path, True, 50, summary_file)
 
         expected = [
             'chr2	48	.	C	A	50	PASS	.\n',
