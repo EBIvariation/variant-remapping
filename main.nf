@@ -81,7 +81,7 @@ process uncompressInputVCF {
 /*
  * Store the original VCF header for later use
  */
-process StoreVCFHeader {
+process storeVCFHeader {
 
     input:
         path "source.vcf"
@@ -225,7 +225,7 @@ workflow {
         prepare_old_genome(params.oldgenome)
         prepare_new_genome(params.newgenome)
         uncompressInputVCF(params.vcffile)
-        StoreVCFHeader(uncompressInputVCF.out.vcf_file)
+        storeVCFHeader(uncompressInputVCF.out.vcf_file)
         process_split_reads(
             uncompressInputVCF.out.vcf_file,
             params.oldgenome,
@@ -234,7 +234,7 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
-        finalise(process_split_reads.out.variants_remapped, StoreVCFHeader.out.vcf_header)
+        finalise(process_split_reads.out.variants_remapped, storeVCFHeader.out.vcf_header)
 }
 
 //process_with_bowtie
@@ -243,7 +243,7 @@ workflow process_with_bowtie {
         prepare_old_genome(params.oldgenome)
         prepare_new_genome_bowtie(params.newgenome)
         uncompressInputVCF(params.vcffile)
-        StoreVCFHeader(uncompressInputVCF.out.vcf_file)
+        storeVCFHeader(uncompressInputVCF.out.vcf_file)
         process_split_reads_with_bowtie(
             uncompressInputVCF.out.vcf_file,
             params.oldgenome,
@@ -253,5 +253,5 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        finalise(process_split_reads_with_bowtie.out.variants_remapped, StoreVCFHeader.out.vcf_header)
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header)
 }

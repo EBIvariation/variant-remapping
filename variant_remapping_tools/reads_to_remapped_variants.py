@@ -177,8 +177,7 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
                     output_failed_alignment(primary_group, out_failed)
             else:
                 output_failed_alignment(primary_group, out_failed)
-    for metric in ['Too many alignments', 'Flank unmapped', 'Different chromosomes',
-                   'Poor alignment', 'Overlapping alignment', 'Soft-clipped alignments', 'Remapped']:
+    for metric in counter.keys() - {'total'}:
         print(f'{counter[metric]} ({counter[metric]/counter["total"]:.2%}) variants rejected for {metric}')
 
 
