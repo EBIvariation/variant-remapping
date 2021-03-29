@@ -9,7 +9,7 @@ nextflow.enable.dsl=2
 /*
  * Convert the VCF file to BED format.
  */
-process ConvertVCFToBed {
+process convertVCFToBed {
 
     input:
         path "source.vcf"
@@ -251,8 +251,8 @@ workflow process_split_reads {
 
     main:
         flank_length = 50
-        ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
+        convertVCFToBed(source_vcf)
+        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
@@ -288,8 +288,8 @@ workflow process_split_reads_mid {
 
     main:
         flank_length = 2000
-        ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
+        convertVCFToBed(source_vcf)
+        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
@@ -323,8 +323,8 @@ workflow process_split_reads_long {
 
     main:
         flank_length = 50000
-        ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
+        convertVCFToBed(source_vcf)
+        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
@@ -359,8 +359,8 @@ workflow process_split_reads_with_bowtie {
 
     main:
         flank_length = 50
-        ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
+        convertVCFToBed(source_vcf)
+        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
