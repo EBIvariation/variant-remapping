@@ -24,7 +24,7 @@ process convertVCFToBed {
 }
 
 /*
- * Based on variants BED, generate the flanking regions BED.
+ * Based on variants BED, generate the flanking regions BED files.
  */
 process flankingRegionBed {
 
@@ -38,6 +38,9 @@ process flankingRegionBed {
         path "flanking_r2.bed", emit: flanking_r2_bed
 
     script:
+    // The Flanking sequence will start/end one base up/downstream  of the variant.
+    // We need to add only (flankingseq - 1) to that base to have the correct flank length
+    flankingseq = flankingseq - 1
     """
     awk 'BEGIN{OFS="\t"}{\$2=\$2-1;\$3=\$3-1; print \$0}' variants.bed \
         | bedtools slop  -g genome.chrom.sizes -l $flankingseq -r 0  > flanking_r1.bed
@@ -225,19 +228,29 @@ process readsToRemappedVariants {
         path "reads_aligned.bam"
         path "genome.fa"
         val flank_length
+        val filter_align_with_secondary
 
     output:
         path "variants_remapped.vcf", emit: variants_remapped
         path "variants_unmapped.vcf", emit: variants_unmapped
         path "summary.yml", emit: summary_yml
 
+    script:
+    if (filter_align_with_secondary)
     """
     # Ensure that we will use the reads_to_remapped_variants.py from this repo
     ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
-        -o variants_remapped.vcf  --filter_align_with_secondary \
-        --newgenome genome.fa --out_failed_file variants_unmapped.vcf --flank_length $flank_length \
-        --summary summary.yml
+        -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
+        --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
     """
+    else
+    """
+    # Ensure that we will use the reads_to_remapped_variants.py from this repo
+    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+        -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
+        --flank_length $flank_length --summary summary.yml
+    """
+
 }
 
 workflow process_split_reads {
@@ -268,7 +281,7 @@ workflow process_split_reads {
             flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
-        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length)
+        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, true)
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
@@ -304,7 +317,7 @@ workflow process_split_reads_mid {
             new_genome_fa, flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
-        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length)
+        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, true)
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
@@ -339,7 +352,8 @@ workflow process_split_reads_long {
             new_genome_fa, flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
-        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length)
+        // This last step will use all alignments enven the one that have alternative secondary alignments
+        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, false)
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
@@ -374,7 +388,7 @@ workflow process_split_reads_with_bowtie {
             extractVariantInfoToFastaHeader.out.variant_read2_with_info,
             new_genome_bowtie_index
         )
-        readsToRemappedVariants(alignWithBowtie.out.reads_aligned_bam, new_genome_fa, flank_length)
+        readsToRemappedVariants(alignWithBowtie.out.reads_aligned_bam, new_genome_fa, flank_length, true)
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped

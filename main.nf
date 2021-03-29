@@ -16,16 +16,9 @@ def helpMessage() {
             --newgenome    new genome which the original vcf file will be mapped against [required]
     Outputs:
             --outfile      final vcf containing variants mapped to new genome [required]
-    Parameters:
-            --flankingseq  The length of the flanking sequences that generates reads (default 50)
-            --scorecutoff  Percentage of the flanking sequences that should be used as the alignment score cut-off threshold (default 0.6)
-            --diffcutoff   Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold (default 0.04)
     """
 }
 
-params.flankingseq = 50
-params.scorecutoff = 0.6
-params.diffcutoff =  0.04
 params.outfile = null
 params.oldgenome = null
 params.newgenome = null
@@ -43,16 +36,8 @@ if (!params.vcffile || !params.oldgenome || !params.outfile || !params.newgenome
     if (!params.newgenome)  log.warn('Provide a fasta file for the new genome file using --newgenome') 
     exit 1, helpMessage()
 }
- 
-// Index files for both old and new genomes 
-oldgenome_dir = file(params.oldgenome).getParent()
-oldgenome_basename = file(params.oldgenome).getName()
-oldgenome_fai = file("${params.oldgenome}.fai")
-newgenome_dir = file(params.newgenome).getParent()
-newgenome_basename = file(params.newgenome).getName()
-newgenome_fai = file("${params.newgenome}.fai")
 
-// basename and basedir of the output file to know how to name the output file
+// basename and basedir of the output file to know how to name the output files
 outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
 
@@ -120,6 +105,11 @@ process buildHeader {
     # Copy everything that isn't #CHROM (the column titles), ##contig or ##reference from the old header to a temp
     awk '(\$1 !~ /^##contig/ && \$1 !~ /^##reference/ && \$1 !~ /^#CHROM/) {print \$0}' vcf_header.txt > temp_header.txt
 
+    # Add variant remapping INFO definition to the header
+    echo -e '##INFO=<ID=st,Number=1,Type=String,Description="Strand change observed in the alignment.">' >> temp_header.txt
+    echo -e '##INFO=<ID=rac,Number=1,Type=String,Description="Reference allele change during the alignment.">' >> temp_header.txt
+    echo -e '##INFO=<ID=nra,Number=1,Type=String,Description="Novel reference allele that was not observed in the previous set of alternate">' >> temp_header.txt
+    echo -e '##INFO=<ID=zlr,Number=1,Type=String,Description="Zero length allele. Hard to be expanded from the reference.">' >> temp_header.txt
     # Add the two headers together and add the column names
     cat temp_header.txt contigs.txt > final_header.txt
     echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> final_header.txt
