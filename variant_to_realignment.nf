@@ -352,7 +352,7 @@ workflow process_split_reads_long {
             new_genome_fa, flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
-        // This last step will use all alignments enven the one that have alternative secondary alignments
+        // This last step will use all alignments even the ones that have alternative secondary alignments
         readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, false)
 
     emit:

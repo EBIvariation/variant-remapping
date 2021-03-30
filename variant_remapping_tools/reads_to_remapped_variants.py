@@ -1,13 +1,12 @@
 #! /usr/bin/env python3
 import argparse
 from argparse import RawTextHelpFormatter
-from collections import Counter
+from collections import Counter, defaultdict
 
 import yaml
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 import pysam
-from pysam.libcvcf import defaultdict
 
 
 def reverse_complement(sequence):
@@ -214,7 +213,7 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
                 left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
                     counter['Remapped'] += 1
-                    varpos, new_ref, new_alts, ops= calculate_new_variant_definition(left_read, right_read, fasta)
+                    varpos, new_ref, new_alts, ops = calculate_new_variant_definition(left_read, right_read, fasta)
                     info = left_read.query_name.split('|')
                     if info[7] != '.':
                         info[7] += ';'.join(ops)
