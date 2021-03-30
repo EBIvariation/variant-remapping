@@ -236,20 +236,20 @@ process readsToRemappedVariants {
         path "summary.yml", emit: summary_yml
 
     script:
-    if (filter_align_with_secondary)
-    """
-    # Ensure that we will use the reads_to_remapped_variants.py from this repo
-    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
-        -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
-        --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
-    """
-    else
-    """
-    # Ensure that we will use the reads_to_remapped_variants.py from this repo
-    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
-        -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
-        --flank_length $flank_length --summary summary.yml
-    """
+        if (filter_align_with_secondary)
+            """
+            # Ensure that we will use the reads_to_remapped_variants.py from this repo
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+                -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
+                --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
+            """
+        else
+            """
+            # Ensure that we will use the reads_to_remapped_variants.py from this repo
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+                -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
+                --flank_length $flank_length --summary summary.yml
+           """
 
 }
 
