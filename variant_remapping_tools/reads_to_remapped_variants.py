@@ -189,16 +189,16 @@ def link_supplementary(primary_group, supplementary_group):
     supplementary_dict = {}
     primary_to_supplementary = defaultdict(list)
     for supplementary_read in supplementary_group:
-        supplementary_dict[supplementary_read.reference_name + str(supplementary_read.reference_start)] = supplementary_read
+        supplementary_dict[supplementary_read.reference_name + str(supplementary_read.reference_start + 1)] = supplementary_read
     for primary in primary_group:
         # chr2,808117,+,1211M790S,60,1;
-        if primary.has_tag():
-            other_alignments = primary.get_tag('AS').split(';')
-            for other_alignment in other_alignments:
-                rname, pos = other_alignment.split(',')[:2]
-                primary_to_supplementary[primary].append(
-                    supplementary_dict[rname + pos]
-                )
+        if primary.has_tag('SA'):
+            for other_alignment in primary.get_tag('SA').split(';'):
+                if other_alignment:
+                    rname, pos = other_alignment.split(',')[:2]
+                    primary_to_supplementary[primary].append(
+                        supplementary_dict[rname + pos]
+                    )
     return dict(primary_to_supplementary)
 
 
