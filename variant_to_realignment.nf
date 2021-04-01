@@ -253,7 +253,7 @@ process readsToRemappedVariants {
 
 }
 
-workflow process_split_reads {
+workflow process_split_reads_generic {
     take:
         source_vcf
         old_genome_fa
@@ -261,9 +261,10 @@ workflow process_split_reads {
         old_genome_chrom_sizes
         new_genome_fa
         new_genome_fa_fai
+        flank_length
+        filter_align_with_secondary
 
     main:
-        flank_length = 50
         convertVCFToBed(source_vcf)
         flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
@@ -281,12 +282,36 @@ workflow process_split_reads {
             flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
-        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, true)
+        readsToRemappedVariants(
+            sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
+            flank_length, filter_align_with_secondary
+        )
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
         summary_yml = readsToRemappedVariants.out.summary_yml
+}
+
+workflow process_split_reads {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+    main:
+        flank_length = 50
+        filter_align_with_secondary = true
+        process_split_reads_generic(
+            source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+        )
+    emit:
+        variants_remapped = process_split_reads_generic.out.variants_remapped
+        variants_unmapped = process_split_reads_generic.out.variants_unmapped
+        summary_yml = process_split_reads_generic.out.summary_yml
 }
 
 
@@ -301,27 +326,15 @@ workflow process_split_reads_mid {
 
     main:
         flank_length = 2000
-        convertVCFToBed(source_vcf)
-        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
-        flankingRegionFasta(
-            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
-            old_genome_fa, old_genome_fa_fai
+        filter_align_with_secondary = true
+        process_split_reads_generic(
+            source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
         )
-        extractVariantInfoToFastaHeader(
-            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
-            flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
-        )
-        alignWithMinimap(
-            extractVariantInfoToFastaHeader.out.variant_read1_with_info,
-            extractVariantInfoToFastaHeader.out.variant_read2_with_info,
-            new_genome_fa, flank_length
-        )
-        sortByName(alignWithMinimap.out.reads_aligned_bam)
-        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, true)
     emit:
-        variants_remapped = readsToRemappedVariants.out.variants_remapped
-        variants_unmapped = readsToRemappedVariants.out.variants_unmapped
-        summary_yml = readsToRemappedVariants.out.summary_yml
+        variants_remapped = process_split_reads_generic.out.variants_remapped
+        variants_unmapped = process_split_reads_generic.out.variants_unmapped
+        summary_yml = process_split_reads_generic.out.summary_yml
 }
 
 
@@ -336,29 +349,15 @@ workflow process_split_reads_long {
 
     main:
         flank_length = 50000
-        convertVCFToBed(source_vcf)
-        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
-        flankingRegionFasta(
-            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
-            old_genome_fa, old_genome_fa_fai
+        filter_align_with_secondary = false
+        process_split_reads_generic(
+            source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
         )
-        extractVariantInfoToFastaHeader(
-            flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
-            flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
-        )
-        alignWithMinimap(
-            extractVariantInfoToFastaHeader.out.variant_read1_with_info,
-            extractVariantInfoToFastaHeader.out.variant_read2_with_info,
-            new_genome_fa, flank_length
-        )
-        sortByName(alignWithMinimap.out.reads_aligned_bam)
-        // This last step will use all alignments even the ones that have alternative secondary alignments
-        readsToRemappedVariants(sortByName.out.reads_aligned_sorted_bam, new_genome_fa, flank_length, false)
-
     emit:
-        variants_remapped = readsToRemappedVariants.out.variants_remapped
-        variants_unmapped = readsToRemappedVariants.out.variants_unmapped
-        summary_yml = readsToRemappedVariants.out.summary_yml
+        variants_remapped = process_split_reads_generic.out.variants_remapped
+        variants_unmapped = process_split_reads_generic.out.variants_unmapped
+        summary_yml = process_split_reads_generic.out.summary_yml
 }
 
 workflow process_split_reads_with_bowtie {

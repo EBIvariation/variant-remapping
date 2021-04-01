@@ -42,6 +42,14 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
         operations.append('st=-')
+    else:
+        # This case should be handled by the filtering but raise just in case...
+        error_msg = (f'Impossible read configuration: '
+                     f'read1 is_reverse: {left_read.is_reverse}, '
+                     f'read2 is_reverse: {right_read.is_reverse}, '
+                     f'read1 position: {left_read.pos}, '
+                     f'read2 position: {right_read.pos}')
+        raise ValueError(error_msg)
 
     # 2. Assign new allele sequences
     if new_ref == old_ref_conv:
