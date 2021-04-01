@@ -120,10 +120,8 @@ def group_reads(bam_file_path):
 
 
 def _order_reads(primary_group, primary_to_supplementary):
-    """
-    Order read and return the most 5' (smallest coordinates) first.
-    if a supplementary read exists and is closer to the other read then it is used in place of the primary
-    """
+    """Order reads and return the most 5' (smallest coordinates) first.
+    If a supplementary read exists and is closer to the other read then it is used in place of the primary."""
     read1, read2 = primary_group
     suppl_read1 = suppl_read2 = None
     if read1 in primary_to_supplementary:
@@ -253,7 +251,7 @@ def main():
     parser.add_argument('--flank_length', type=int, required=True,
                         help='Length of the flanking region used.')
     parser.add_argument('--summary', type=str, required=True,
-                        help='Yaml files containing the summary metrics')
+                        help='YAML files containing the summary metrics')
 
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignments that have one or several secondary alignments.')
