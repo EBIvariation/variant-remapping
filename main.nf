@@ -197,8 +197,6 @@ process combineVCF {
         path "variants1.vcf"
         path "variants2.vcf"
         path "variants3.vcf"
-
-
     output:
         path "merge.vcf", emit: merge_vcf
 
