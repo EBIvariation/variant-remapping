@@ -164,7 +164,7 @@ process alignWithMinimap {
         # Options used by the 'sr' preset with some modifications:
         # -O6,16 instead of -O12,32 --> reduce indel cost
         # -B5 instead of -B10 --> reduce mismatch cost
-        # --end-bonus 20  --> bonus score when the end of the read aligns to mimic global alignment.
+        # --end-bonus 20 --> bonus score when the end of the read aligns to mimic global alignment.
         # --secondary=yes -N 2 --> allow up to 2 secondary alignments
         minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
                  -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
