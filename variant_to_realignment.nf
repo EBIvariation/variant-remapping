@@ -9,7 +9,7 @@ nextflow.enable.dsl=2
 /*
  * Convert the VCF file to BED format.
  */
-process ConvertVCFToBed {
+process convertVCFToBed {
 
     input:
         path "source.vcf"
@@ -24,25 +24,29 @@ process ConvertVCFToBed {
 }
 
 /*
- * Based on variants BED, generate the flanking regions BED.
+ * Based on variants BED, generate the flanking regions BED files.
  */
 process flankingRegionBed {
 
     input:
         path "variants.bed"
         path "genome.chrom.sizes"
+        val flankingseq
 
     output:
         path "flanking_r1.bed", emit: flanking_r1_bed
         path "flanking_r2.bed", emit: flanking_r2_bed
 
     script:
+    // The Flanking sequence will start/end one base up/downstream  of the variant.
+    // We need to add only (flankingseq - 1) to that base to have the correct flank length
+    flankingseq = flankingseq - 1
     """
     awk 'BEGIN{OFS="\t"}{\$2=\$2-1;\$3=\$3-1; print \$0}' variants.bed \
-        | bedtools slop  -g genome.chrom.sizes -l $params.flankingseq -r 0  > flanking_r1.bed
+        | bedtools slop  -g genome.chrom.sizes -l $flankingseq -r 0  > flanking_r1.bed
 
     awk 'BEGIN{OFS="\t"}{\$2=\$2+length(\$6);\$3=\$3+length(\$6); print \$0}' variants.bed \
-        | bedtools slop  -g genome.chrom.sizes -l 0 -r $params.flankingseq  > flanking_r2.bed
+        | bedtools slop  -g genome.chrom.sizes -l 0 -r $flankingseq  > flanking_r2.bed
     """
 }
 
@@ -96,8 +100,8 @@ process extractVariantInfoToFastaHeader {
     // Disable the string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
     '''
-    # Store variant positions
-    cut -f 1,3 flanking_r1.bed > position.txt
+    # Store variant positions (add + 1 to revert to one based position)
+    awk '{print $1"\t"$3 + 1}' flanking_r1.bed > position.txt
 
     # Store ref bases
     cut -f 6 flanking_r1.bed > old_ref_bases.txt
@@ -147,16 +151,46 @@ process alignWithMinimap {
         path "variant_read1.fa"
         path "variant_read2.fa"
         // indexing is done on the fly so get the genome directly
-        path 'genome.fa'
+        path "genome.fa"
+        val flanklength
 
     output:
         path "reads_aligned.bam", emit: reads_aligned_bam
 
+
+    script:
+    if (flanklength < 500)
+        """
+        # Options used by the 'sr' preset with some modifications:
+        # -O6,16 instead of -O12,32 --> reduce indel cost
+        # -B5 instead of -B10 --> reduce mismatch cost
+        # --end-bonus 20 --> bonus score when the end of the read aligns to mimic global alignment.
+        # --secondary=yes -N 2 --> allow up to 2 secondary alignments
+        minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
+                 -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
+                 -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+        """
+    else
+        """
+        minimap2 -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
+                 --secondary=yes -N 2 \
+                 -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+        """
+}
+
+/*
+ * Sort BAM file by name
+ */
+process sortByName {
+
+    input:
+        path "reads_aligned.bam"
+
+    output:
+        path "reads_aligned_name_sorted.bam", emit: reads_aligned_sorted_bam
+
     """
-    # Options used by the 'sr' preset but allowing secondary alignments
-    minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
-             -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
-             -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+    samtools sort -n -O BAM -o reads_aligned_name_sorted.bam reads_aligned.bam
     """
 }
 
@@ -193,20 +227,33 @@ process readsToRemappedVariants {
     input:
         path "reads_aligned.bam"
         path "genome.fa"
+        val flank_length
+        val filter_align_with_secondary
 
     output:
         path "variants_remapped.vcf", emit: variants_remapped
         path "variants_unmapped.vcf", emit: variants_unmapped
+        path "summary.yml", emit: summary_yml
 
-    """
-    # Ensure that we will use the reads_to_remapped_variants.py from this repo
-    ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
-        -o variants_remapped.vcf  --filter_align_with_secondary \
-        --newgenome genome.fa --out_failed_file variants_unmapped.vcf
-    """
+    script:
+        if (filter_align_with_secondary)
+            """
+            # Ensure that we will use the reads_to_remapped_variants.py from this repo
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+                -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
+                --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
+            """
+        else
+            """
+            # Ensure that we will use the reads_to_remapped_variants.py from this repo
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+                -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
+                --flank_length $flank_length --summary summary.yml
+           """
+
 }
 
-workflow process_split_reads {
+workflow process_split_reads_generic {
     take:
         source_vcf
         old_genome_fa
@@ -214,10 +261,12 @@ workflow process_split_reads {
         old_genome_chrom_sizes
         new_genome_fa
         new_genome_fa_fai
+        flank_length
+        filter_align_with_secondary
 
     main:
-        ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes)
+        convertVCFToBed(source_vcf)
+        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
@@ -229,13 +278,86 @@ workflow process_split_reads {
         alignWithMinimap(
             extractVariantInfoToFastaHeader.out.variant_read1_with_info,
             extractVariantInfoToFastaHeader.out.variant_read2_with_info,
-            new_genome_fa
+            new_genome_fa,
+            flank_length
         )
-        readsToRemappedVariants(alignWithMinimap.out.reads_aligned_bam, new_genome_fa)
+        sortByName(alignWithMinimap.out.reads_aligned_bam)
+        readsToRemappedVariants(
+            sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
+            flank_length, filter_align_with_secondary
+        )
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
+        summary_yml = readsToRemappedVariants.out.summary_yml
+}
+
+workflow process_split_reads {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+    main:
+        flank_length = 50
+        filter_align_with_secondary = true
+        process_split_reads_generic(
+            source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+        )
+    emit:
+        variants_remapped = process_split_reads_generic.out.variants_remapped
+        variants_unmapped = process_split_reads_generic.out.variants_unmapped
+        summary_yml = process_split_reads_generic.out.summary_yml
+}
+
+
+workflow process_split_reads_mid {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+
+    main:
+        flank_length = 2000
+        filter_align_with_secondary = true
+        process_split_reads_generic(
+            source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+        )
+    emit:
+        variants_remapped = process_split_reads_generic.out.variants_remapped
+        variants_unmapped = process_split_reads_generic.out.variants_unmapped
+        summary_yml = process_split_reads_generic.out.summary_yml
+}
+
+
+workflow process_split_reads_long {
+    take:
+        source_vcf
+        old_genome_fa
+        old_genome_fa_fai
+        old_genome_chrom_sizes
+        new_genome_fa
+        new_genome_fa_fai
+
+    main:
+        flank_length = 50000
+        filter_align_with_secondary = false
+        process_split_reads_generic(
+            source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+        )
+    emit:
+        variants_remapped = process_split_reads_generic.out.variants_remapped
+        variants_unmapped = process_split_reads_generic.out.variants_unmapped
+        summary_yml = process_split_reads_generic.out.summary_yml
 }
 
 workflow process_split_reads_with_bowtie {
@@ -249,8 +371,9 @@ workflow process_split_reads_with_bowtie {
         new_genome_bowtie_index
 
     main:
-        ConvertVCFToBed(source_vcf)
-        flankingRegionBed(ConvertVCFToBed.out.variants_bed, old_genome_chrom_sizes)
+        flank_length = 50
+        convertVCFToBed(source_vcf)
+        flankingRegionBed(convertVCFToBed.out.variants_bed, old_genome_chrom_sizes, flank_length)
         flankingRegionFasta(
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             old_genome_fa, old_genome_fa_fai
@@ -264,9 +387,10 @@ workflow process_split_reads_with_bowtie {
             extractVariantInfoToFastaHeader.out.variant_read2_with_info,
             new_genome_bowtie_index
         )
-        readsToRemappedVariants(alignWithBowtie.out.reads_aligned_bam, new_genome_fa)
+        readsToRemappedVariants(alignWithBowtie.out.reads_aligned_bam, new_genome_fa, flank_length, true)
 
     emit:
         variants_remapped = readsToRemappedVariants.out.variants_remapped
         variants_unmapped = readsToRemappedVariants.out.variants_unmapped
+        summary_yml = readsToRemappedVariants.out.summary_yml
 }

@@ -16,16 +16,9 @@ def helpMessage() {
             --newgenome    new genome which the original vcf file will be mapped against [required]
     Outputs:
             --outfile      final vcf containing variants mapped to new genome [required]
-    Parameters:
-            --flankingseq  The length of the flanking sequences that generates reads (default 50)
-            --scorecutoff  Percentage of the flanking sequences that should be used as the alignment score cut-off threshold (default 0.6)
-            --diffcutoff   Percentage of the flanking sequences that should be used as the AS-XS difference cut-off threshold (default 0.04)
     """
 }
 
-params.flankingseq = 50
-params.scorecutoff = 0.6
-params.diffcutoff =  0.04
 params.outfile = null
 params.oldgenome = null
 params.newgenome = null
@@ -43,16 +36,8 @@ if (!params.vcffile || !params.oldgenome || !params.outfile || !params.newgenome
     if (!params.newgenome)  log.warn('Provide a fasta file for the new genome file using --newgenome') 
     exit 1, helpMessage()
 }
- 
-// Index files for both old and new genomes 
-oldgenome_dir = file(params.oldgenome).getParent()
-oldgenome_basename = file(params.oldgenome).getName()
-oldgenome_fai = file("${params.oldgenome}.fai")
-newgenome_dir = file(params.newgenome).getParent()
-newgenome_basename = file(params.newgenome).getName()
-newgenome_fai = file("${params.newgenome}.fai")
 
-// basename and basedir of the output file to know how to name the output file
+// basename and basedir of the output file to know how to name the output files
 outfile_basename = file(params.outfile).getName()
 outfile_dir = file(params.outfile).getParent()
 
@@ -95,7 +80,7 @@ process storeVCFHeader {
 }
 
 include { prepare_old_genome; prepare_new_genome; prepare_new_genome_bowtie } from './prepare_genome.nf'
-include { process_split_reads; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
+include { process_split_reads; process_split_reads_mid; process_split_reads_long; process_split_reads_with_bowtie } from './variant_to_realignment.nf'
 
 
 /*
@@ -120,6 +105,11 @@ process buildHeader {
     # Copy everything that isn't #CHROM (the column titles), ##contig or ##reference from the old header to a temp
     awk '(\$1 !~ /^##contig/ && \$1 !~ /^##reference/ && \$1 !~ /^#CHROM/) {print \$0}' vcf_header.txt > temp_header.txt
 
+    # Add variant remapping INFO definition to the header
+    echo -e '##INFO=<ID=st,Number=1,Type=String,Description="Strand change observed in the alignment.">' >> temp_header.txt
+    echo -e '##INFO=<ID=rac,Number=1,Type=String,Description="Reference allele change during the alignment.">' >> temp_header.txt
+    echo -e '##INFO=<ID=nra,Number=1,Type=String,Description="Novel reference allele that was not observed in the previous set of alternate">' >> temp_header.txt
+    echo -e '##INFO=<ID=zlr,Number=1,Type=String,Description="Zero length allele. Hard to be expanded from the reference.">' >> temp_header.txt
     # Add the two headers together and add the column names
     cat temp_header.txt contigs.txt > final_header.txt
     echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> final_header.txt
@@ -157,7 +147,6 @@ process sortVCF {
 
     """
     bgzip variants_remapped.vcf
-    tabix variants_remapped.vcf.gz
     bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
     """
 }
@@ -186,20 +175,47 @@ process normalise {
 /*
  * Create file containing remapping stats
  */
-process calculateStats {
+process outputStats {
 
     publishDir outfile_dir,
         overwrite: true,
         mode: "copy"
 
     input:
-        path outfile_basename
+        path "summary"
 
     output:
-        path "${outfile_basename}.stats"
+        path "${outfile_basename}.yml"
 
     """
-    bcftools stats ${outfile_basename} > ${outfile_basename}.stats
+    ln -s summary "${outfile_basename}.yml"
+    """
+}
+
+process combineVCF {
+    input:
+        path "variants1.vcf"
+        path "variants2.vcf"
+        path "variants3.vcf"
+    output:
+        path "merge.vcf", emit: merge_vcf
+
+    """
+    cat variants1.vcf variants2.vcf variants3.vcf > merge.vcf
+    """
+}
+
+process combineYaml {
+    input:
+        path "round1.yml"
+        path "round2.yml"
+        path "round3.yml"
+
+    output:
+        path "merge.yml", emit: merge_yml
+
+    """
+    cat round1.yml round2.yml round3.yml > merge.yml
     """
 }
 
@@ -208,13 +224,15 @@ workflow finalise {
     take:
         variants_remapped
         vcf_header
+        genome
+        summary
 
     main:
         buildHeader(variants_remapped, vcf_header)
         mergeHeaderAndContent(buildHeader.out.final_header, variants_remapped)
         sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
-        normalise(sortVCF.out.variants_remapped_sorted_gz, params.newgenome)
-        calculateStats(normalise.out.final_output_vcf)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, genome)
+        outputStats(summary)
 }
 
 
@@ -234,7 +252,34 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
-        finalise(process_split_reads.out.variants_remapped, storeVCFHeader.out.vcf_header)
+        process_split_reads_mid(
+            process_split_reads.out.variants_unmapped,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome.out.genome_fai
+        )
+        process_split_reads_long(
+            process_split_reads_mid.out.variants_unmapped,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome.out.genome_fai
+        )
+        combineVCF(
+            process_split_reads.out.variants_remapped,
+            process_split_reads_mid.out.variants_remapped,
+            process_split_reads_long.out.variants_remapped
+        )
+        combineYaml(
+            process_split_reads.out.summary_yml,
+            process_split_reads_mid.out.summary_yml,
+            process_split_reads_long.out.summary_yml,
+        )
+
+        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header, params.newgenome, combineYaml.out.merge_yml)
 }
 
 //process_with_bowtie
@@ -253,5 +298,5 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header)
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header, params.newgenome,  process_split_reads_with_bowtie.out.merge_yml)
 }
