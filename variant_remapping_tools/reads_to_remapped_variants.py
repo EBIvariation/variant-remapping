@@ -64,7 +64,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
-        operations.append('nra=T')
+        operations.append('nra')
 
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
@@ -169,7 +169,9 @@ def pass_aligned_filtering(left_read, right_read, counter):
     :param counter: Counter to report the number of reads filtered.
     :return: True or False
     """
-    if left_read.cigartuples[-1][1] == 'S' or right_read.cigartuples[0][1] == 'S':
+    # in CIGAR tuples the operation is coded as an integer
+    # https://pysam.readthedocs.io/en/latest/api.html#pysam.AlignedSegment.cigartuples
+    if left_read.cigartuples[-1][0] == 4 or right_read.cigartuples[0][0] == 4:
         counter['Soft-clipped alignments'] += 1
     elif left_read.reference_end > right_read.reference_start:
         counter['Overlapping alignment'] += 1
@@ -220,16 +222,22 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
-                    counter['Remapped'] += 1
                     varpos, new_ref, new_alts, ops = calculate_new_variant_definition(left_read, right_read, fasta)
-                    info = left_read.query_name.split('|')
-                    if info[7] != '.':
-                        info[7] += ';'.join(ops)
+                    if 'nra' not in ops:
+                        counter['Remapped'] += 1
+                        info = left_read.query_name.split('|')
+                        if info[7] != '.':
+                            info[7] += ';'.join(ops)
+                        else:
+                            info[7] = ';'.join(ops)
+                        outfile.write(
+                            '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
+                                                                  ','.join(new_alts), info[5], info[6], info[7]))
                     else:
-                        info[7] = ';'.join(ops)
-                    outfile.write(
-                        '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
-                                                              ','.join(new_alts), info[5], info[6], info[7]))
+                        # Currently the alignment is not precise enough to ensure that the novel reference allele
+                        # are correct. So we skip them
+                        counter['Novel reference allele'] += 1
+                        output_failed_alignment(primary_group, out_failed)
                 else:
                     output_failed_alignment(primary_group, out_failed)
             else:

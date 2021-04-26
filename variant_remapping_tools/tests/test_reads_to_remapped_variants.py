@@ -1,10 +1,11 @@
 import os
+from collections import Counter
 from unittest.mock import Mock, patch
 
 import pysam
 from unittest import TestCase
 from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, process_bam_file, \
-    calculate_new_variant_definition, _order_reads, link_supplementary
+    calculate_new_variant_definition, _order_reads, link_supplementary, pass_aligned_filtering, group_reads
 
 
 class TestProcess(TestCase):
@@ -71,6 +72,13 @@ class TestProcess(TestCase):
                 assert line == expected[i]
             # Expected and Generated VCF have the same number of lines
             assert i+1 == len(expected)
+
+    def test_pass_aligned_filtering(self):
+        left_read = self.mk_read(reference_start=0, reference_end=47, cigartuples=[(0, 47)])
+        right_read = self.mk_read(reference_start=51, reference_end=95,  cigartuples=[(4, 3), (0, 44)])
+        counter = Counter()
+        assert not pass_aligned_filtering(left_read, right_read, counter)
+        assert counter['Soft-clipped alignments'] == 1
 
     def test_link_supplementary(self):
         primary_group = [
