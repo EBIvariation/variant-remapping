@@ -31,13 +31,13 @@ ls ${SCRIPT_DIR}/resources/remap.vcf \
 # Build the expected VCF
 cat << EOT > "${SCRIPT_DIR}/resources/expected_remap.vcf"
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-chr2	48	.	C	A	50	PASS	st=+;rac=.
-chr2	48	.	C	T	50	PASS	st=+;rac=.
-chr2	98	.	C	CG	50	PASS	st=+;rac=.
+chr2	48	.	C	A	50	PASS	st=+
+chr2	48	.	C	T	50	PASS	st=+
+chr2	98	.	C	CG	50	PASS	st=+
 chr2	1078	.	A	G	50	PASS	st=+;rac=G-A
-chr2	1818	.	AAC	A	50	PASS	st=+;rac=.
-chr2	2030	.	A	TCC	50	PASS	st=+;rac=.
-chr2	3510	.	T	C	50	PASS	st=+;rac=.
+chr2	1818	.	AAC	A	50	PASS	st=+
+chr2	2030	.	A	TCC	50	PASS	st=+
+chr2	3510	.	T	C	50	PASS	st=+
 EOT
 
 # Compare vs the expected VCF

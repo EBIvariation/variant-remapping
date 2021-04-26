@@ -18,6 +18,9 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     Resolve the variant definition from the flanking region alignment and old variant definition
     TODO: Link to algorithm description once public
     """
+    # Flag to highlight low confidence in an event detected
+    low_confidence = False
+
     # Grab information from the read name
     name = left_read.query_name
     info = name.split('|')
@@ -54,26 +57,28 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     # 2. Assign new allele sequences
     if new_ref == old_ref_conv:
         new_alts = old_alt_conv
-        operations.append('rac=.')
     elif new_ref in old_alt_conv:
         old_alt_conv.remove(new_ref)
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
+        if len(old_ref_conv) != len(new_ref):
+            low_confidence = True
     else:
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
         operations.append('nra')
+        low_confidence = True
 
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
-        operations.append('zlr=T')
+        operations.append('zlr')
 
-    return new_pos, new_ref, new_alts, operations
+    return new_pos, new_ref, new_alts, operations, low_confidence
 
 
 def fetch_bases(fasta, contig, start, length):
@@ -222,8 +227,8 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
-                    varpos, new_ref, new_alts, ops = calculate_new_variant_definition(left_read, right_read, fasta)
-                    if 'nra' not in ops:
+                    varpos, new_ref, new_alts, ops, low_confidence = calculate_new_variant_definition(left_read, right_read, fasta)
+                    if not low_confidence:
                         counter['Remapped'] += 1
                         info = left_read.query_name.split('|')
                         if info[7] != '.':
@@ -234,9 +239,10 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
                             '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
                                                                   ','.join(new_alts), info[5], info[6], info[7]))
                     else:
-                        # Currently the alignment is not precise enough to ensure that the novel reference allele
-                        # are correct. So we skip them
-                        counter['Novel reference allele'] += 1
+                        # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
+                        # novel reference allele are correct. So we skip them.
+                        # TODO: add realignment confirmation
+                        counter['Low confidence event'] += 1
                         output_failed_alignment(primary_group, out_failed)
                 else:
                     output_failed_alignment(primary_group, out_failed)
