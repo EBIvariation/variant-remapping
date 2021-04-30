@@ -100,7 +100,7 @@ process extractVariantInfoToFastaHeader {
     // Disable the string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
     '''
-    # Store variant positions (Add + 1 to revert to one based position)
+    # Store variant positions (add + 1 to revert to one based position)
     awk '{print $1"\t"$3 + 1}' flanking_r1.bed > position.txt
 
     # Store ref bases

@@ -268,7 +268,7 @@ def main():
     parser.add_argument('--flank_length', type=int, required=True,
                         help='Length of the flanking region used.')
     parser.add_argument('--summary', type=str, required=True,
-                        help='Yaml files containing the summary metrics')
+                        help='YAML files containing the summary metrics')
 
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignments that have one or several secondary alignments.')
