@@ -176,7 +176,7 @@ def pass_aligned_filtering(left_read, right_read, counter):
     """
     # in CIGAR tuples the operation is coded as an integer
     # https://pysam.readthedocs.io/en/latest/api.html#pysam.AlignedSegment.cigartuples
-    if left_read.cigartuples[-1][0] == 4 or right_read.cigartuples[0][0] == 4:
+    if left_read.cigartuples[-1][0] == pysam.CSOFT_CLIP or right_read.cigartuples[0][0] == pysam.CSOFT_CLIP:
         counter['Soft-clipped alignments'] += 1
     elif left_read.reference_end > right_read.reference_start:
         counter['Overlapping alignment'] += 1
@@ -227,7 +227,8 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
-                    varpos, new_ref, new_alts, ops, low_confidence = calculate_new_variant_definition(left_read, right_read, fasta)
+                    varpos, new_ref, new_alts, ops, low_confidence = \
+                        calculate_new_variant_definition(left_read, right_read, fasta)
                     if not low_confidence:
                         counter['Remapped'] += 1
                         info = left_read.query_name.split('|')
