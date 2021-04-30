@@ -108,8 +108,8 @@ process buildHeader {
     # Add variant remapping INFO definition to the header
     echo -e '##INFO=<ID=st,Number=1,Type=String,Description="Strand change observed in the alignment.">' >> temp_header.txt
     echo -e '##INFO=<ID=rac,Number=1,Type=String,Description="Reference allele change during the alignment.">' >> temp_header.txt
-    echo -e '##INFO=<ID=nra,Number=1,Type=String,Description="Novel reference allele that was not observed in the previous set of alternate">' >> temp_header.txt
-    echo -e '##INFO=<ID=zlr,Number=1,Type=String,Description="Zero length allele. Hard to be expanded from the reference.">' >> temp_header.txt
+    echo -e '##INFO=<ID=nra,Number=0,Type=Flag,Description="Novel reference allele that was not observed in the previous set of alternate">' >> temp_header.txt
+    echo -e '##INFO=<ID=zlr,Number=0,Type=Flag,Description="Zero length allele. Had to be expanded from the reference.">' >> temp_header.txt
     # Add the two headers together and add the column names
     cat temp_header.txt contigs.txt > final_header.txt
     echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> final_header.txt

@@ -18,6 +18,9 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     Resolve the variant definition from the flanking region alignment and old variant definition
     TODO: Link to algorithm description once public
     """
+    # Flag to highlight low confidence in an event detected
+    failure_reason = None
+
     # Grab information from the read name
     name = left_read.query_name
     info = name.split('|')
@@ -54,26 +57,28 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     # 2. Assign new allele sequences
     if new_ref == old_ref_conv:
         new_alts = old_alt_conv
-        operations.append('rac=.')
     elif new_ref in old_alt_conv:
         old_alt_conv.remove(new_ref)
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
+        if len(old_ref_conv) != len(new_ref):
+            failure_reason = 'Reference Allele length change'
     else:
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
-        operations.append('nra=T')
+        operations.append('nra')
+        failure_reason = 'Novel Reference Allele'
 
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
-        operations.append('zlr=T')
+        operations.append('zlr')
 
-    return new_pos, new_ref, new_alts, operations
+    return new_pos, new_ref, new_alts, operations, failure_reason
 
 
 def fetch_bases(fasta, contig, start, length):
@@ -119,9 +124,11 @@ def group_reads(bam_file_path):
             yield primary_group, supplementary_group, secondary_group
 
 
-def _order_reads(primary_group, primary_to_supplementary):
-    """Order reads and return the most 5' (smallest coordinates) first.
-    If a supplementary read exists and is closer to the other read then it is used in place of the primary."""
+def order_reads(primary_group, primary_to_supplementary):
+    """
+    Order read and return the most 5' (smallest coordinates) first.
+    if a supplementary read exists and is closer to the other read then it is used in place of the primary
+    """
     read1, read2 = primary_group
     suppl_read1 = suppl_read2 = None
     if read1 in primary_to_supplementary:
@@ -167,7 +174,9 @@ def pass_aligned_filtering(left_read, right_read, counter):
     :param counter: Counter to report the number of reads filtered.
     :return: True or False
     """
-    if left_read.cigartuples[-1][1] == 'S' or right_read.cigartuples[0][1] == 'S':
+    # in CIGAR tuples the operation is coded as an integer
+    # https://pysam.readthedocs.io/en/latest/api.html#pysam.AlignedSegment.cigartuples
+    if left_read.cigartuples[-1][0] == pysam.CSOFT_CLIP or right_read.cigartuples[0][0] == pysam.CSOFT_CLIP:
         counter['Soft-clipped alignments'] += 1
     elif left_read.reference_end > right_read.reference_start:
         counter['Overlapping alignment'] += 1
@@ -216,18 +225,26 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
             counter['total'] += 1
             primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
-                left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
+                left_read, right_read = order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
-                    counter['Remapped'] += 1
-                    varpos, new_ref, new_alts, ops = calculate_new_variant_definition(left_read, right_read, fasta)
-                    info = left_read.query_name.split('|')
-                    if info[7] != '.':
-                        info[7] += ';'.join(ops)
+                    varpos, new_ref, new_alts, ops, failure_reason = \
+                        calculate_new_variant_definition(left_read, right_read, fasta)
+                    if not failure_reason:
+                        counter['Remapped'] += 1
+                        info = left_read.query_name.split('|')
+                        if info[7] != '.':
+                            info[7] += ';'.join(ops)
+                        else:
+                            info[7] = ';'.join(ops)
+                        outfile.write(
+                            '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
+                                                                  ','.join(new_alts), info[5], info[6], info[7]))
                     else:
-                        info[7] = ';'.join(ops)
-                    outfile.write(
-                        '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
-                                                              ','.join(new_alts), info[5], info[6], info[7]))
+                        # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
+                        # novel reference allele are correct. So we skip them.
+                        # TODO: add realignment confirmation see #14 and EVA-2417
+                        counter[failure_reason] += 1
+                        output_failed_alignment(primary_group, out_failed)
                 else:
                     output_failed_alignment(primary_group, out_failed)
             else:
