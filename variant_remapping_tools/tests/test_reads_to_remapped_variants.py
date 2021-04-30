@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pysam
 from unittest import TestCase
 from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, process_bam_file, \
-    calculate_new_variant_definition, _order_reads, link_supplementary, pass_aligned_filtering, group_reads
+    calculate_new_variant_definition, order_reads, link_supplementary, pass_aligned_filtering, group_reads
 
 
 class TestProcess(TestCase):
@@ -74,9 +74,12 @@ class TestProcess(TestCase):
             assert i+1 == len(expected)
 
     def test_pass_aligned_filtering(self):
-        left_read = self.mk_read(reference_start=0, reference_end=47, cigartuples=[(0, 47)])
-        right_read = self.mk_read(reference_start=51, reference_end=95,  cigartuples=[(4, 3), (0, 44)])
+        left_read = self.mk_read(reference_start=0, reference_end=47, cigartuples=[(pysam.CMATCH, 47)])
+        right_read = self.mk_read(
+            reference_start=51, reference_end=95,  cigartuples=[(pysam.CSOFT_CLIP, 3), (pysam.CMATCH, 44)]
+        )
         counter = Counter()
+        # Soft clipped alignment on the side of the variant are filtered out
         assert not pass_aligned_filtering(left_read, right_read, counter)
         assert counter['Soft-clipped alignments'] == 1
 
@@ -96,7 +99,7 @@ class TestProcess(TestCase):
             self.mk_read(reference_name='chr2', reference_start=48, reference_end=58, is_reverse=False)
         ]
         primary_to_supplementary = {}
-        left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
+        left_read, right_read = order_reads(primary_group, primary_to_supplementary)
         assert left_read == primary_group[0]
         assert right_read == primary_group[1]
 
@@ -104,7 +107,7 @@ class TestProcess(TestCase):
             self.mk_read(reference_name='chr2', reference_start=48, reference_end=58, is_reverse=True),
             self.mk_read(reference_name='chr2', reference_start=1, reference_end=47, is_reverse=True)
         ]
-        left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
+        left_read, right_read = order_reads(primary_group, primary_to_supplementary)
         assert left_read == primary_group[1]
         assert right_read == primary_group[0]
 
@@ -114,7 +117,7 @@ class TestProcess(TestCase):
         ]
         supplementary_read = self.mk_read(reference_name='chr2', reference_start=20, reference_end=47, is_reverse=False)
         primary_to_supplementary = {primary_group[0]: [supplementary_read]}
-        left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
+        left_read, right_read = order_reads(primary_group, primary_to_supplementary)
         assert left_read == supplementary_read
         assert right_read == primary_group[1]
 
@@ -125,25 +128,25 @@ class TestProcess(TestCase):
         left_read = self.mk_read(query_name='chr1|48|C|A', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
         right_read = self.mk_read(query_name='chr1|48|C|A', reference_name='chr2', reference_start=48, reference_end=108, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A'], ['st=+'], False)
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A'], ['st=+'], None)
 
         # Reverse strand alignment for SNP
         left_read = self.mk_read(query_name='chr1|48|C|A,T', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=True)
         right_read = self.mk_read(query_name='chr1|48|C|A,T', reference_name='chr2', reference_start=48, reference_end=108, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='G'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'G', ['T', 'A'], ['st=-'], False)
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'G', ['T', 'A'], ['st=-'], None)
 
         # Forward strand alignment for SNP with novel allele
         left_read = self.mk_read(query_name='chr1|48|T|A', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
         right_read = self.mk_read(query_name='chr1|48|T|A', reference_name='chr2', reference_start=48, reference_end=108, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A', 'T'], ['st=+', 'rac=T-C', 'nra'], True)
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'C', ['A', 'T'], ['st=+', 'rac=T-C', 'nra'], 'Novel Reference Allele')
 
         # Forward strand alignment for Deletion
         left_read = self.mk_read(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
         right_read = self.mk_read(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=50, reference_end=110, is_reverse=False)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='CAA'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'CAA', ['C'], ['st=+'], False)
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'CAA', ['C'], ['st=+'], None)
 
         # Reverse strand alignment for a deletion
         # REF  AAAAAAAAAAAAAAAAATTGCCCCCCCCCCCCCCCCC
@@ -153,7 +156,7 @@ class TestProcess(TestCase):
         left_read = self.mk_read(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=True)
         right_read = self.mk_read(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=50, reference_end=110, is_reverse=True)
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='TTG'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'TTG', ['G'], ['st=-'], False)
+            assert calculate_new_variant_definition(left_read, right_read, fasta) == (48, 'TTG', ['G'], ['st=-'], None)
 
 
     @staticmethod

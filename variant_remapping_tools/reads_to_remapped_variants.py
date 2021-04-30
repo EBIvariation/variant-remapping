@@ -19,7 +19,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
     TODO: Link to algorithm description once public
     """
     # Flag to highlight low confidence in an event detected
-    low_confidence = False
+    failure_reason = None
 
     # Grab information from the read name
     name = left_read.query_name
@@ -63,13 +63,13 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
         if len(old_ref_conv) != len(new_ref):
-            low_confidence = True
+            failure_reason = 'Reference Allele length change'
     else:
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations.append('rac=' + old_ref_conv + '-' + new_ref)
         operations.append('nra')
-        low_confidence = True
+        failure_reason = 'Novel Reference Allele'
 
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
@@ -78,7 +78,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         new_alts = [new_ref + alt for alt in new_alts]
         operations.append('zlr')
 
-    return new_pos, new_ref, new_alts, operations, low_confidence
+    return new_pos, new_ref, new_alts, operations, failure_reason
 
 
 def fetch_bases(fasta, contig, start, length):
@@ -124,7 +124,7 @@ def group_reads(bam_file_path):
             yield primary_group, supplementary_group, secondary_group
 
 
-def _order_reads(primary_group, primary_to_supplementary):
+def order_reads(primary_group, primary_to_supplementary):
     """
     Order read and return the most 5' (smallest coordinates) first.
     if a supplementary read exists and is closer to the other read then it is used in place of the primary
@@ -225,11 +225,11 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
             counter['total'] += 1
             primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
-                left_read, right_read = _order_reads(primary_group, primary_to_supplementary)
+                left_read, right_read = order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
-                    varpos, new_ref, new_alts, ops, low_confidence = \
+                    varpos, new_ref, new_alts, ops, failure_reason = \
                         calculate_new_variant_definition(left_read, right_read, fasta)
-                    if not low_confidence:
+                    if not failure_reason:
                         counter['Remapped'] += 1
                         info = left_read.query_name.split('|')
                         if info[7] != '.':
@@ -242,8 +242,8 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, fi
                     else:
                         # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
                         # novel reference allele are correct. So we skip them.
-                        # TODO: add realignment confirmation
-                        counter['Low confidence event'] += 1
+                        # TODO: add realignment confirmation see #14 and EVA-2417
+                        counter[failure_reason] += 1
                         output_failed_alignment(primary_group, out_failed)
                 else:
                     output_failed_alignment(primary_group, out_failed)
