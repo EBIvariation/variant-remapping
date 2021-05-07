@@ -45,8 +45,8 @@ EOT
 diff "${SCRIPT_DIR}/resources/expected_remap.vcf" <(grep -v '^##' "${SCRIPT_DIR}/resources/remap.vcf")
 
 # Clean up after the test
-#rm -rf work .nextflow* \
-#       ${SCRIPT_DIR}/resources/source.vcf \
-#       ${SCRIPT_DIR}/resources/*remap.vcf* \
-#       ${SCRIPT_DIR}/resources/new_genome.fa.* \
-#       ${SCRIPT_DIR}/resources/genome.fa.fai
+rm -rf work .nextflow* \
+       ${SCRIPT_DIR}/resources/source.vcf \
+       ${SCRIPT_DIR}/resources/*remap.vcf* \
+       ${SCRIPT_DIR}/resources/new_genome.fa.* \
+       ${SCRIPT_DIR}/resources/genome.fa.fai
