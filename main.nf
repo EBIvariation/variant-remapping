@@ -75,7 +75,7 @@ process storeVCFHeader {
         path "vcf_header.txt", emit: vcf_header
 
     """
-    bcftools view --header-only source.vcf | grep -v '^##FORMAT' >  vcf_header.txt
+    grep '^#' source.vcf >  vcf_header.txt
     """
 }
 
@@ -112,7 +112,7 @@ process buildHeader {
     echo -e '##INFO=<ID=zlr,Number=0,Type=Flag,Description="Zero length allele. Had to be expanded from the reference.">' >> temp_header.txt
     # Add the two headers together and add the column names
     cat temp_header.txt contigs.txt > final_header.txt
-    echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO" >> final_header.txt
+    tail -n 1 vcf_header.txt >> final_header.txt
     """
 }
 
@@ -145,10 +145,10 @@ process sortVCF {
     output:
         path "variants_remapped_sorted.vcf.gz", emit: variants_remapped_sorted_gz
 
-    """
-    bgzip variants_remapped.vcf
-    bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
-    """
+    '''
+    awk '$1 ~ /^#/ {print $0;next} {print $0 | "sort -k1,1 -k2,2n"}' variants_remapped.vcf > variants_remapped_sorted.vcf
+    bgzip variants_remapped_sorted.vcf
+    '''
 }
 
 /*
@@ -168,7 +168,7 @@ process normalise {
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools norm -c ws -f genome.fa -N variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 

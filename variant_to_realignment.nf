@@ -17,10 +17,16 @@ process convertVCFToBed {
     output:
         path "variants.bed", emit: variants_bed
 
-    """
-    # TODO: Change vcf2bed so it does not split the alternates into two lines
-    vcf2bed < source.vcf > variants.bed
-    """
+    '''
+
+    awk -F '\\t' 'BEGIN{seek_pos=0}
+                 { if (!/^#/){ \
+                    printf $1"\\t"$2-1"\\t"$2"\\t"seek_pos; \
+                    for (i=3; i<=NF; i++){printf "|"$i}; print "_"}; \
+                    seek_pos+=length($0) + 1\
+                 }' source.vcf \
+                 > variants.bed
+    '''
 }
 
 /*
@@ -45,7 +51,7 @@ process flankingRegionBed {
     awk 'BEGIN{OFS="\t"}{\$2=\$2-1;\$3=\$3-1; print \$0}' variants.bed \
         | bedtools slop  -g genome.chrom.sizes -l $flankingseq -r 0  > flanking_r1.bed
 
-    awk 'BEGIN{OFS="\t"}{\$2=\$2+length(\$6);\$3=\$3+length(\$6); print \$0}' variants.bed \
+    awk 'BEGIN{OFS="\t"}{split(\$4,a,"|"); \$2=\$2+length(a[3]);\$3=\$3+length(a[3]); print \$0}' variants.bed \
         | bedtools slop  -g genome.chrom.sizes -l 0 -r $flankingseq  > flanking_r2.bed
     """
 }
@@ -103,39 +109,28 @@ process extractVariantInfoToFastaHeader {
     # Store variant positions (add + 1 to revert to one based position)
     awk '{print $1"\t"$3 + 1}' flanking_r1.bed > position.txt
 
-    # Store ref bases
-    cut -f 6 flanking_r1.bed > old_ref_bases.txt
-
-    # Store rsIDs
-    cut -f 4 flanking_r1.bed > rsIDs.txt
-
-    # Store variant bases
-    cut -f 7 flanking_r1.bed > variant_bases.txt
-
-    # Store the other vcf columns
-    cut -f 5,8,9 flanking_r1.bed > qual_filt_info.txt
+    # Store position of the variant in the file
+    cut -f 4 flanking_r1.bed > line_position.txt
 
     # Paste the names, variant bases, then fasta sequences into a new file
-    paste position.txt old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-    <(grep -v '^>' variants_read1.fa) | awk '{print ">"$0}' > temp1.txt
+    paste position.txt line_position.txt <(grep -v '^>' variants_read1.fa) | awk '{print ">"$0}' > temp1.txt
 
-    paste position.txt old_ref_bases.txt variant_bases.txt rsIDs.txt qual_filt_info.txt \
-    <(grep -v '^>' variants_read2.fa) | awk '{print ">"\$0}' > temp2.txt
+    paste position.txt line_position.txt <(grep -v '^>' variants_read2.fa) | awk '{print ">"$0}' > temp2.txt
 
     # Reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
     # command is a bit ugly
     # Input:
-    # >[chr]|[pos interval]   [REF]       [ALT]       [rsID]    [QUAL] [FILT] [INFO]      [seq]
+    # >[chr]|[pos]   [Position in original_file]      [seq]
     # Replace all spaces and tabs with "|":
-    # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]|[seq]
+    # >[chr]|[pos]|[Position in original_file]|[seq]
     # Replace the last "|" with a space (this is between the header and the sequence):
     # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO] [seq]
     # And finally replace the space with a newline:
     # Output:
     # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]
     # [seq]
-    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp1.txt | tr ' ' '\\n' > variant_read1.out.fa
-    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp2.txt | tr ' ' '\\n' > variant_read2.out.fa
+    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp1.txt | awk '{if (length($1)>250){split($1,a,"|"); $1=a[1]"|"a[2]"|"a[3]}; print $0}' | tr ' ' '\\n' > variant_read1.out.fa
+    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp2.txt | awk '{if (length($1)>250){split($1,a,"|"); $1=a[1]"|"a[2]"|"a[3]}; print $0}' | tr ' ' '\\n' > variant_read2.out.fa
     '''
 }
 
@@ -225,6 +220,7 @@ process alignWithBowtie {
 process readsToRemappedVariants {
 
     input:
+        path "original.vcf"
         path "reads_aligned.bam"
         path "genome.fa"
         val flank_length
@@ -239,14 +235,14 @@ process readsToRemappedVariants {
         if (filter_align_with_secondary)
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -v original.vcf -i reads_aligned.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
             """
         else
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -v original.vcf  -i reads_aligned.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml
            """
@@ -283,7 +279,7 @@ workflow process_split_reads_generic {
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
         readsToRemappedVariants(
-            sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
+            source_vcf, sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
             flank_length, filter_align_with_secondary
         )
 

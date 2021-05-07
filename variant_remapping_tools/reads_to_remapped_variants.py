@@ -13,7 +13,7 @@ def reverse_complement(sequence):
     return str(Seq(sequence, generic_dna).reverse_complement())
 
 
-def calculate_new_variant_definition(left_read, right_read, ref_fasta):
+def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_vcf_rec):
     """
     Resolve the variant definition from the flanking region alignment and old variant definition
     TODO: Link to algorithm description once public
@@ -23,9 +23,9 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
 
     # Grab information from the read name
     name = left_read.query_name
-    info = name.split('|')
-    old_ref = info[2]
-    old_alts = info[3].split(',')
+
+    old_ref = original_vcf_rec[3]
+    old_alts = original_vcf_rec[4].split(',')
 
     operations = []
     # Define new ref and new pos
@@ -187,12 +187,11 @@ def pass_aligned_filtering(left_read, right_read, counter):
     return False
 
 
-def output_failed_alignment(primary_group, outfile):
+def output_failed_alignment(original_vcf_rec, outfile):
     """
     Output the original VCF entry when alignment have failed to pass all thresholds
     """
-    info = primary_group[0].query_name.split('|')
-    print('\t'.join(info[:2] + [info[4]] + info[2:4] + info[5:]), file=outfile)
+    print('\t'.join(original_vcf_rec), file=outfile)
 
 
 def link_supplementary(primary_group, supplementary_group):
@@ -216,39 +215,54 @@ def link_supplementary(primary_group, supplementary_group):
     return dict(primary_to_supplementary)
 
 
-def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary,
-                     flank_length, summary_file):
+def get_vcf_entry(name, invcf_file_path):
+    """Retrieve the full VCF record either from the read name or by fetching it in the original file"""
+    # Remove the trailing underscore that have been added in convertVCFToBed
+    name_info = name.rstrip('_').split('|')
+    if len(name_info) < 4:
+        # Fetch the line from the file
+        with open(invcf_file_path) as open_file:
+            open_file.seek(int(name_info[2]))
+            return open_file.readline().strip().split('\t')
+    else:
+        return name_info[0:2] + name_info[3:]
+
+
+def process_bam_file(invcf_file_path, bam_file_path, output_file, out_failed_file, new_genome,
+                     filter_align_with_secondary, flank_length, summary_file):
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
+
     with open(output_file, 'w') as outfile, open(out_failed_file, 'w') as out_failed:
         for primary_group, supplementary_group, secondary_group in group_reads(bam_file_path):
             counter['total'] += 1
             primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
+            original_vcf_rec = get_vcf_entry(primary_group[0].query_name, invcf_file_path)
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
                     varpos, new_ref, new_alts, ops, failure_reason = \
-                        calculate_new_variant_definition(left_read, right_read, fasta)
+                        calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
                     if not failure_reason:
                         counter['Remapped'] += 1
-                        info = left_read.query_name.split('|')
-                        if info[7] != '.':
-                            info[7] += ';'.join(ops)
+                        if original_vcf_rec[7] != '.':
+                            original_vcf_rec[7] = ';'.join(original_vcf_rec[7].strip(';').split(';') + ops)
                         else:
-                            info[7] = ';'.join(ops)
+                            original_vcf_rec[7] = ';'.join(ops)
                         outfile.write(
-                            '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
-                                                                  ','.join(new_alts), info[5], info[6], info[7]))
+                            '%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, original_vcf_rec[2],
+                                                          new_ref, ','.join(new_alts), '\t'.join(original_vcf_rec[5:]))
+                        )
                     else:
                         # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
                         # novel reference allele are correct. So we skip them.
                         # TODO: add realignment confirmation see #14 and EVA-2417
                         counter[failure_reason] += 1
-                        output_failed_alignment(primary_group, out_failed)
+                        output_failed_alignment(original_vcf_rec, out_failed)
                 else:
-                    output_failed_alignment(primary_group, out_failed)
+                    output_failed_alignment(original_vcf_rec, out_failed)
             else:
-                output_failed_alignment(primary_group, out_failed)
+                output_failed_alignment(original_vcf_rec, out_failed)
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
 
@@ -259,6 +273,8 @@ def main():
                    'separate file.')
 
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
+    parser.add_argument('-v', '--vcf', type=str, required=True,
+                        help='original vcf file containing the source data')
     parser.add_argument('-i', '--bam', type=str, required=True,
                         help='Input BAM file with remapped flanking regions')
     parser.add_argument('-o', '--outfile', type=str, required=True,
@@ -276,6 +292,7 @@ def main():
     args = parser.parse_args()
 
     process_bam_file(
+        invcf_file_path=args.vcf,
         bam_file_path=args.bam,
         output_file=args.outfile,
         out_failed_file=args.out_failed_file,
