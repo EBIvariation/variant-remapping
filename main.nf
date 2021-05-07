@@ -146,8 +146,8 @@ process sortVCF {
         path "variants_remapped_sorted.vcf.gz", emit: variants_remapped_sorted_gz
 
     '''
-    awk '$1 ~ /^#/ {print $0;next} {print $0 | "sort -k1,1 -k2,2n"}' variants_remapped.vcf > variants_remapped_sorted.vcf
-    bgzip variants_remapped_sorted.vcf
+    bgzip variants_remapped.vcf
+    bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
     '''
 }
 
