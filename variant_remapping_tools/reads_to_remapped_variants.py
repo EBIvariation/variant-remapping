@@ -20,10 +20,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     """
     # Flag to highlight low confidence in an event detected
     failure_reason = None
-
-    # Grab information from the read name
-    name = left_read.query_name
-
     old_ref = original_vcf_rec[3]
     old_alts = original_vcf_rec[4].split(',')
 

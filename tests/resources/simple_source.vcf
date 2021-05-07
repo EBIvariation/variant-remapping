@@ -1,0 +1,8 @@
+##fileformat=VCFv4.3
+#CHROM	POS	ID	REF	 ALT	QUAL 	FILTER	INFO
+chr1	48	.	C	A,T	50	PASS	.
+chr1	98	.	C	CG	50	PASS	.
+chr1	1078	.	G	A	50	PASS	.
+chr1	1818	.	AAC	A	50	PASS	.
+chr1	2030	.	A	TCC	50	PASS	.
+chr1	3510	.	T	C	50	PASS	.
