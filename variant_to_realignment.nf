@@ -18,14 +18,16 @@ process convertVCFToBed {
         path "variants.bed", emit: variants_bed
 
     '''
-
-    awk -F '\\t' 'BEGIN{seek_pos=0}
-                 { if (!/^#/){ \
-                    printf $1"\\t"$2-1"\\t"$2"\\t"seek_pos; \
-                    for (i=3; i<=NF; i++){printf "|"$i}; print "_"}; \
-                    seek_pos+=length($0) + 1\
-                 }' source.vcf \
-                 > variants.bed
+    # Convert the vcf file to bed format:
+    #  - Remove all headers
+    #  - Switch to 0 based coordinates system
+    #  - Add the reference allele so it can be used in flankingRegionBed to adjust the position of the right flank
+    #  - add all VCF fields separated by pipe (|)
+    awk -F '\\t' '{ if (!/^#/){ \
+                    printf $1"\\t"$2-1"\\t"$2"\\t"$4"\\t"$1; \
+                    for (i=2; i<=NF; i++){printf "|"$i}; print ""}; \
+                  }' source.vcf \
+                  > variants.bed
     '''
 }
 
@@ -48,10 +50,12 @@ process flankingRegionBed {
     // We need to add only (flankingseq - 1) to that base to have the correct flank length
     flankingseq = flankingseq - 1
     """
-    awk 'BEGIN{OFS="\t"}{\$2=\$2-1;\$3=\$3-1; print \$0}' variants.bed \
+    # Adjust the end position of the flank to be one base upstream of the variant
+    awk 'BEGIN{OFS="\\t"}{\$2=\$2-1; \$3=\$3-1; print \$0}' variants.bed \
         | bedtools slop  -g genome.chrom.sizes -l $flankingseq -r 0  > flanking_r1.bed
 
-    awk 'BEGIN{OFS="\t"}{split(\$4,a,"|"); \$2=\$2+length(a[3]);\$3=\$3+length(a[3]); print \$0}' variants.bed \
+    # Adjust the start position of the flank to be one base downstream of the end of variant (\$4 is the reference allele)
+    awk 'BEGIN{OFS="\\t"}{ \$2=\$2+length(\$4); \$3=\$3+length(\$4); print \$0}' variants.bed \
         | bedtools slop  -g genome.chrom.sizes -l 0 -r $flankingseq  > flanking_r2.bed
     """
 }
@@ -77,14 +81,6 @@ process flankingRegionFasta {
     # Get the fasta sequences for these intervals
     bedtools getfasta -fi genome.fa -bed flanking_r1.bed -fo variants_read1.fa
     bedtools getfasta -fi genome.fa -bed flanking_r2.bed -fo variants_read2.fa
-
-    # Replace the colon separators with "|":
-    # Storing this information for later on in the script when we split the name by "|" to extract the relevant 
-    # information (ALT allele, QUAL, FILT, INFO)
-    # This is done because the INFO column can contain ":", which means we wouldn't be able to split by ":", so "|" was 
-    # chosen
-    sed -i 's/:/|/' variants_read1.fa
-    sed -i 's/:/|/' variants_read2.fa
     '''
 }
 
@@ -106,31 +102,19 @@ process extractVariantInfoToFastaHeader {
     // Disable the string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
     '''
-    # Store variant positions (add + 1 to revert to one based position)
-    awk '{print $1"\t"$3 + 1}' flanking_r1.bed > position.txt
+    # Store variant position in the file to have a unique name
+    awk '{print ">" NR }' flanking_r1.bed > position.txt
 
     # Store position of the variant in the file
-    cut -f 4 flanking_r1.bed > line_position.txt
+    cut -f 5 flanking_r1.bed > vcf_fields.txt
 
     # Paste the names, variant bases, then fasta sequences into a new file
-    paste position.txt line_position.txt <(grep -v '^>' variants_read1.fa) | awk '{print ">"$0}' > temp1.txt
+    # A space will be inserted between the position and the vcf fields
+    # Then a newline is inserted between the vcf fields and the sequence
+    # The vcf fields are regarded as comment to the fasta entry.
+    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read1.fa)  > variant_read1.out.fa
 
-    paste position.txt line_position.txt <(grep -v '^>' variants_read2.fa) | awk '{print ">"$0}' > temp2.txt
-
-    # Reformat the fasta ID: inconsistencies in the separators, and no new line before the sequence mean that this next 
-    # command is a bit ugly
-    # Input:
-    # >[chr]|[pos]   [Position in original_file]      [seq]
-    # Replace all spaces and tabs with "|":
-    # >[chr]|[pos]|[Position in original_file]|[seq]
-    # Replace the last "|" with a space (this is between the header and the sequence):
-    # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO] [seq]
-    # And finally replace the space with a newline:
-    # Output:
-    # >[chr]|[pos interval]|[REF]|[ALT|[rsID]|[QUAL|[FILT]|[INFO]
-    # [seq]
-    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp1.txt | awk '{if (length($1)>250){split($1,a,"|"); $1=a[1]"|"a[2]"|"a[3]}; print $0}' | tr ' ' '\\n' > variant_read1.out.fa
-    sed 's/\\t/|/g; s/ /|/g; s/\\(.*\\)|/\\1 /' temp2.txt | awk '{if (length($1)>250){split($1,a,"|"); $1=a[1]"|"a[2]"|"a[3]}; print $0}' | tr ' ' '\\n' > variant_read2.out.fa
+    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read2.fa)  > variant_read2.out.fa
     '''
 }
 
@@ -161,15 +145,21 @@ process alignWithMinimap {
         # -B5 instead of -B10 --> reduce mismatch cost
         # --end-bonus 20 --> bonus score when the end of the read aligns to mimic global alignment.
         # --secondary=yes -N 2 --> allow up to 2 secondary alignments
+        # -y option will take the comment from the fasta entry and output it
+        # the awk script will convert this comment in valid SAM tag
         minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
-                 -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 \
-                 -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+                 -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 -y \
+                 -a genome.fa variant_read1.fa variant_read2.fa | \
+                 awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
+                 samtools view -bS - > reads_aligned.bam
         """
     else
         """
         minimap2 -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
-                 --secondary=yes -N 2 \
-                 -a genome.fa variant_read1.fa variant_read2.fa | samtools view -bS - > reads_aligned.bam
+                 --secondary=yes -N 2 -y \
+                 -a genome.fa variant_read1.fa variant_read2.fa | \
+                 awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
+                 samtools view -bS - > reads_aligned.bam
         """
 }
 
@@ -220,7 +210,6 @@ process alignWithBowtie {
 process readsToRemappedVariants {
 
     input:
-        path "original.vcf"
         path "reads_aligned.bam"
         path "genome.fa"
         val flank_length
@@ -235,14 +224,14 @@ process readsToRemappedVariants {
         if (filter_align_with_secondary)
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -v original.vcf -i reads_aligned.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
             """
         else
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -v original.vcf  -i reads_aligned.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml
            """
@@ -279,7 +268,7 @@ workflow process_split_reads_generic {
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
         readsToRemappedVariants(
-            source_vcf, sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
+            sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
             flank_length, filter_align_with_secondary
         )
 

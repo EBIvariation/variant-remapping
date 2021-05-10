@@ -55,12 +55,11 @@ class TestProcess(TestCase):
         """
 
         bamfile = self.get_test_resource("reads_aligned_test.bam")
-        invcf = self.get_test_resource("simple_source.vcf")
         fasta_path = self.get_test_resource('new_genome.fa')
         output_file = '/tmp/remapped.vcf'
         summary_file = '/tmp/summary.yml'
         out_failed_file = '/tmp/unmapped.vcf'
-        process_bam_file(invcf, bamfile, output_file, out_failed_file, fasta_path, True, 50, summary_file)
+        process_bam_file(bamfile, output_file, out_failed_file, fasta_path, True, 50, summary_file)
 
         expected = [
             'chr2	98	.	C	CG	50	PASS	st=+	GT:GQ	1/1:0\n',

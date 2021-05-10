@@ -22,7 +22,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     failure_reason = None
     old_ref = original_vcf_rec[3]
     old_alts = original_vcf_rec[4].split(',')
-
     operations = []
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
@@ -211,20 +210,7 @@ def link_supplementary(primary_group, supplementary_group):
     return dict(primary_to_supplementary)
 
 
-def get_vcf_entry(name, invcf_file_path):
-    """Retrieve the full VCF record either from the read name or by fetching it in the original file"""
-    # Remove the trailing underscore that have been added in convertVCFToBed
-    name_info = name.rstrip('_').split('|')
-    if len(name_info) < 4:
-        # Fetch the line from the file
-        with open(invcf_file_path) as open_file:
-            open_file.seek(int(name_info[2]))
-            return open_file.readline().strip().split('\t')
-    else:
-        return name_info[0:2] + name_info[3:]
-
-
-def process_bam_file(invcf_file_path, bam_file_path, output_file, out_failed_file, new_genome,
+def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome,
                      filter_align_with_secondary, flank_length, summary_file):
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
@@ -233,7 +219,8 @@ def process_bam_file(invcf_file_path, bam_file_path, output_file, out_failed_fil
         for primary_group, supplementary_group, secondary_group in group_reads(bam_file_path):
             counter['total'] += 1
             primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
-            original_vcf_rec = get_vcf_entry(primary_group[0].query_name, invcf_file_path)
+            # Retrieve the full VCF record from the bam vr tag
+            original_vcf_rec = primary_group[0].get_tag('vr').split('|')
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
@@ -269,8 +256,6 @@ def main():
                    'separate file.')
 
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('-v', '--vcf', type=str, required=True,
-                        help='original vcf file containing the source data')
     parser.add_argument('-i', '--bam', type=str, required=True,
                         help='Input BAM file with remapped flanking regions')
     parser.add_argument('-o', '--outfile', type=str, required=True,
@@ -288,7 +273,6 @@ def main():
     args = parser.parse_args()
 
     process_bam_file(
-        invcf_file_path=args.vcf,
         bam_file_path=args.bam,
         output_file=args.outfile,
         out_failed_file=args.out_failed_file,
