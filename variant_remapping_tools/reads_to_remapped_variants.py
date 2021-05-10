@@ -22,7 +22,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     failure_reason = None
     old_ref = original_vcf_rec[3]
     old_alts = original_vcf_rec[4].split(',')
-    operations = []
+    operations = {}
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
                           right_read.reference_start - left_read.reference_end)
@@ -34,12 +34,12 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         # Forward strand alignment
         old_ref_conv = old_ref
         old_alt_conv = old_alts
-        operations.append('st=+')
+        operations['st'] = '+'
     elif left_read.is_reverse and right_read.is_reverse:
         # Reverse strand alignment
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
-        operations.append('st=-')
+        operations['st'] = '-'
     else:
         # This case should be handled by the filtering but raise just in case...
         error_msg = (f'Impossible read configuration: '
@@ -56,14 +56,14 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         old_alt_conv.remove(new_ref)
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
-        operations.append('rac=' + old_ref_conv + '-' + new_ref)
+        operations['rac'] = old_ref_conv + '-' + new_ref
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Reference Allele length change'
     else:
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
-        operations.append('rac=' + old_ref_conv + '-' + new_ref)
-        operations.append('nra')
+        operations['rac'] = old_ref_conv + '-' + new_ref
+        operations['nra'] = None
         failure_reason = 'Novel Reference Allele'
 
     # 3. Correct zero-length reference sequence
@@ -71,9 +71,26 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
-        operations.append('zlr')
+        operations['zlr'] = None
 
     return new_pos, new_ref, new_alts, operations, failure_reason
+
+
+def update_vcf_record(operations, original_vcf_rec):
+    # Update The INFO field by adding operations
+    operation_list = [op if operations[op] is None else '%s=%s' % (op, operations[op]) for op in operations]
+    if original_vcf_rec[7] != '.':
+        original_vcf_rec[7] = ';'.join(original_vcf_rec[7].strip(';').split(';') + operation_list)
+    else:
+        original_vcf_rec[7] = ';'.join(operation_list)
+    # If required Update SAMPLE fields by changing the Genotypes
+    if 'rac' in operations and len(original_vcf_rec) > 8 and 'GT' in original_vcf_rec[8]:
+        gt_index = original_vcf_rec[8].split(':').index('GT')
+        for genotype_i in range(9, len(original_vcf_rec)):
+            genotype_str_list = original_vcf_rec[genotype_i].split(':')
+            if genotype_str_list[gt_index] == '1/1':
+                genotype_str_list[gt_index] = '0/0'
+                original_vcf_rec[genotype_i] = ':'.join(genotype_str_list)
 
 
 def fetch_bases(fasta, contig, start, length):
@@ -228,10 +245,7 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome,
                         calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
                     if not failure_reason:
                         counter['Remapped'] += 1
-                        if original_vcf_rec[7] != '.':
-                            original_vcf_rec[7] = ';'.join(original_vcf_rec[7].strip(';').split(';') + ops)
-                        else:
-                            original_vcf_rec[7] = ';'.join(ops)
+                        update_vcf_record(ops, original_vcf_rec)
                         outfile.write(
                             '%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, original_vcf_rec[2],
                                                           new_ref, ','.join(new_alts), '\t'.join(original_vcf_rec[5:]))
