@@ -28,7 +28,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
                           right_read.reference_start - left_read.reference_end)
     new_pos = left_read.reference_end + 1
 
-    # TODO: apply the changes to the genotypes as well if they are present.
     # 1. Handle reference strand change
     if not left_read.is_reverse and not right_read.is_reverse:
         # Forward strand alignment
@@ -76,8 +75,17 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     return new_pos, new_ref, new_alts, operations, failure_reason
 
 
-def update_vcf_record(operations, original_vcf_rec):
-    # Update The INFO field by adding operations
+def update_vcf_record(reference_name, varpos, new_ref, new_alts, operations, original_vcf_rec):
+    """
+    Update the original vcf record with the different fields and use the operations to modify the info and genotypes
+    fields.
+    """
+    original_vcf_rec[0] = reference_name
+    original_vcf_rec[1] = str(varpos)
+    original_vcf_rec[3] = new_ref
+    original_vcf_rec[4] = ','.join(new_alts)
+
+    # Update The INFO field by appending operations
     operation_list = [op if operations[op] is None else '%s=%s' % (op, operations[op]) for op in operations]
     if original_vcf_rec[7] != '.':
         original_vcf_rec[7] = ';'.join(original_vcf_rec[7].strip(';').split(';') + operation_list)
@@ -162,8 +170,10 @@ def order_reads(primary_group, primary_to_supplementary):
 
 
 def pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
-    """Test if the alignment pass basic filtering such as presence of secondary alignments, any primary unmapped,
-    primary mapped on different chromosome, or primary mapped poorly."""
+    """
+    Test if the alignment pass basic filtering such as presence of secondary alignments, any primary unmapped,
+    primary mapped on different chromosome, or primary mapped poorly.
+    """
     if filter_align_with_secondary and len(secondary_group):
         counter['Too many alignments'] += 1
     elif len(primary_group) < 2 or any(read.is_unmapped for read in primary_group):
@@ -199,9 +209,9 @@ def pass_aligned_filtering(left_read, right_read, counter):
     return False
 
 
-def output_failed_alignment(original_vcf_rec, outfile):
+def output_alignment(original_vcf_rec, outfile):
     """
-    Output the original VCF entry when alignment have failed to pass all thresholds
+    Output the original or updated VCF entry to the provided output file.
     """
     print('\t'.join(original_vcf_rec), file=outfile)
 
@@ -245,21 +255,18 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome,
                         calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
                     if not failure_reason:
                         counter['Remapped'] += 1
-                        update_vcf_record(ops, original_vcf_rec)
-                        outfile.write(
-                            '%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, original_vcf_rec[2],
-                                                          new_ref, ','.join(new_alts), '\t'.join(original_vcf_rec[5:]))
-                        )
+                        update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
+                        output_alignment(original_vcf_rec, outfile)
                     else:
                         # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
                         # novel reference allele are correct. So we skip them.
                         # TODO: add realignment confirmation see #14 and EVA-2417
                         counter[failure_reason] += 1
-                        output_failed_alignment(original_vcf_rec, out_failed)
+                        output_alignment(original_vcf_rec, out_failed)
                 else:
-                    output_failed_alignment(original_vcf_rec, out_failed)
+                    output_alignment(original_vcf_rec, out_failed)
             else:
-                output_failed_alignment(original_vcf_rec, out_failed)
+                output_alignment(original_vcf_rec, out_failed)
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
 

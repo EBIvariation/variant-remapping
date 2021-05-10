@@ -145,10 +145,10 @@ process sortVCF {
     output:
         path "variants_remapped_sorted.vcf.gz", emit: variants_remapped_sorted_gz
 
-    '''
+    """
     bgzip variants_remapped.vcf
     bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
-    '''
+    """
 }
 
 /*
