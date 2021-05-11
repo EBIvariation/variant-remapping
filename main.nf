@@ -75,7 +75,7 @@ process storeVCFHeader {
         path "vcf_header.txt", emit: vcf_header
 
     """
-    grep '^#' source.vcf >  vcf_header.txt
+    bcftools view --header-only source.vcf >  vcf_header.txt
     """
 }
 
