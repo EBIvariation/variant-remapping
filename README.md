@@ -45,7 +45,7 @@ nextflow run main.nf
     --oldgenome <genome.fa> \
     --newgenome <new_genome.fa> \
     --vcffile <source.vcf> \
-    --outfile <remap.vcf> \
+    --outfile <remap.vcf>
 ```
 
 ### Input

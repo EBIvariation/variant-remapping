@@ -197,7 +197,10 @@ process alignWithBowtie {
 
 
     """
-    bowtie2 -k 2 --end-to-end --np 0 -f -x bowtie_index/bowtie_index -1 variant_read1.fa -2 variant_read2.fa | samtools view -bS - > reads_aligned.bam
+    bowtie2 -k 2 --end-to-end --np 0 --sam-append-comment -f -x bowtie_index/bowtie_index \
+      -1 variant_read1.fa -2 variant_read2.fa \
+      | awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' \
+      | samtools view -bS - > reads_aligned.bam
     """
 }
 

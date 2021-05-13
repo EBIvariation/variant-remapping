@@ -168,7 +168,7 @@ process normalise {
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools norm --check-ref -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm --check-ref e -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
@@ -236,7 +236,7 @@ workflow finalise {
 }
 
 
-//process_with_minimap
+// process_with_minimap
 // Workflow without a name is the default workflow that gets executed when the file is run through nextflow
 workflow {
     main:
@@ -298,5 +298,6 @@ workflow process_with_bowtie {
             prepare_new_genome_bowtie.out.genome_fai,
             prepare_new_genome_bowtie.out.bowtie_indexes
         )
-        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header, params.newgenome,  process_split_reads_with_bowtie.out.merge_yml)
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header,
+                 params.newgenome, process_split_reads_with_bowtie.out.summary_yml)
 }
