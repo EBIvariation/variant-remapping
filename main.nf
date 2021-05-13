@@ -75,7 +75,7 @@ process storeVCFHeader {
         path "vcf_header.txt", emit: vcf_header
 
     """
-    bcftools view --header-only source.vcf >  vcf_header.txt
+    bcftools view --header-only source.vcf > vcf_header.txt
     """
 }
 
@@ -168,7 +168,7 @@ process normalise {
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools norm -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm --check-ref -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 

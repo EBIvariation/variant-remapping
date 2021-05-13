@@ -1,7 +1,5 @@
 # variant-remapping
-Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA format. No chain file is required. 
-It does however assume that the source and destination genomes are closely related 
-and was designed with the explicit purpose of lifting over variants from one ersiong of the genome to another.
+Pipeline for remapping VCF variants between two arbitrary assemblies in FASTA format. No chain file is required. However, it does assume that the source and destination genomes are closely related and was designed with the explicit purpose of lifting over variants from one version of the genome to another.
 
 **Method**: creates reads from the flanking sequences of each variant, then maps them to the new assembly using 
 minimap2.

@@ -112,9 +112,8 @@ process extractVariantInfoToFastaHeader {
     # A space will be inserted between the position and the vcf fields
     # Then a newline is inserted between the vcf fields and the sequence
     # The vcf fields are regarded as comment to the fasta entry.
-    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read1.fa)  > variant_read1.out.fa
-
-    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read2.fa)  > variant_read2.out.fa
+    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read1.fa) > variant_read1.out.fa
+    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read2.fa) > variant_read2.out.fa
     '''
 }
 
