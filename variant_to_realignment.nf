@@ -22,7 +22,8 @@ process convertVCFToBed {
     #  - Remove all headers
     #  - Switch to 0 based coordinates system
     #  - Add the reference allele so it can be used in flankingRegionBed to adjust the position of the right flank
-    #  - add all VCF fields separated by pipe (|^)
+    #  - add all VCF fields separated by 2 characters pipe and caret (|^) to avoid impacting existing formatting of
+    #    the VCF line. The sub is to protect the % character that would be interpreted by printf otherwise.
     awk -F '\\t' '{ if (!/^#/){ \
                     printf $1"\\t"$2-1"\\t"$2"\\t"$4"\\t"$1; \
                     for (i=2; i<=NF; i++){ sub(/%/, "%%", $i); printf "|^"$i }; print ""}; \
