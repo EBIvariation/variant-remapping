@@ -13,38 +13,32 @@ def reverse_complement(sequence):
     return str(Seq(sequence, generic_dna).reverse_complement())
 
 
-def calculate_new_variant_definition(left_read, right_read, ref_fasta):
+def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_vcf_rec):
     """
     Resolve the variant definition from the flanking region alignment and old variant definition
     TODO: Link to algorithm description once public
     """
     # Flag to highlight low confidence in an event detected
     failure_reason = None
-
-    # Grab information from the read name
-    name = left_read.query_name
-    info = name.split('|')
-    old_ref = info[2]
-    old_alts = info[3].split(',')
-
-    operations = []
+    old_ref = original_vcf_rec[3]
+    old_alts = original_vcf_rec[4].split(',')
+    operations = {}
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
                           right_read.reference_start - left_read.reference_end)
     new_pos = left_read.reference_end + 1
 
-    # TODO: apply the changes to the genotypes as well if they are present.
     # 1. Handle reference strand change
     if not left_read.is_reverse and not right_read.is_reverse:
         # Forward strand alignment
         old_ref_conv = old_ref
         old_alt_conv = old_alts
-        operations.append('st=+')
+        operations['st'] = '+'
     elif left_read.is_reverse and right_read.is_reverse:
         # Reverse strand alignment
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
-        operations.append('st=-')
+        operations['st'] = '-'
     else:
         # This case should be handled by the filtering but raise just in case...
         error_msg = (f'Impossible read configuration: '
@@ -61,14 +55,14 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         old_alt_conv.remove(new_ref)
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
-        operations.append('rac=' + old_ref_conv + '-' + new_ref)
+        operations['rac'] = old_ref_conv + '-' + new_ref
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Reference Allele length change'
     else:
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
-        operations.append('rac=' + old_ref_conv + '-' + new_ref)
-        operations.append('nra')
+        operations['rac'] = old_ref_conv + '-' + new_ref
+        operations['nra'] = None
         failure_reason = 'Novel Reference Allele'
 
     # 3. Correct zero-length reference sequence
@@ -76,9 +70,35 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta):
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
         new_alts = [new_ref + alt for alt in new_alts]
-        operations.append('zlr')
+        operations['zlr'] = None
 
     return new_pos, new_ref, new_alts, operations, failure_reason
+
+
+def update_vcf_record(reference_name, varpos, new_ref, new_alts, operations, original_vcf_rec):
+    """
+    Update the original vcf record with the different fields and use the operations to modify the info and genotypes
+    fields.
+    """
+    original_vcf_rec[0] = reference_name
+    original_vcf_rec[1] = str(varpos)
+    original_vcf_rec[3] = new_ref
+    original_vcf_rec[4] = ','.join(new_alts)
+
+    # Update The INFO field by appending operations
+    operation_list = [op if operations[op] is None else '%s=%s' % (op, operations[op]) for op in operations]
+    if original_vcf_rec[7] != '.':
+        original_vcf_rec[7] = ';'.join(original_vcf_rec[7].strip(';').split(';') + operation_list)
+    else:
+        original_vcf_rec[7] = ';'.join(operation_list)
+    # If required Update SAMPLE fields by changing the Genotypes
+    if 'rac' in operations and len(original_vcf_rec) > 8 and 'GT' in original_vcf_rec[8]:
+        gt_index = original_vcf_rec[8].split(':').index('GT')
+        for genotype_i in range(9, len(original_vcf_rec)):
+            genotype_str_list = original_vcf_rec[genotype_i].split(':')
+            if genotype_str_list[gt_index] == '1/1':
+                genotype_str_list[gt_index] = '0/0'
+                original_vcf_rec[genotype_i] = ':'.join(genotype_str_list)
 
 
 def fetch_bases(fasta, contig, start, length):
@@ -150,8 +170,10 @@ def order_reads(primary_group, primary_to_supplementary):
 
 
 def pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
-    """Test if the alignment pass basic filtering such as presence of secondary alignments, any primary unmapped,
-    primary mapped on different chromosome, or primary mapped poorly."""
+    """
+    Test if the alignment pass basic filtering such as presence of secondary alignments, any primary unmapped,
+    primary mapped on different chromosome, or primary mapped poorly.
+    """
     if filter_align_with_secondary and len(secondary_group):
         counter['Too many alignments'] += 1
     elif len(primary_group) < 2 or any(read.is_unmapped for read in primary_group):
@@ -187,12 +209,11 @@ def pass_aligned_filtering(left_read, right_read, counter):
     return False
 
 
-def output_failed_alignment(primary_group, outfile):
+def output_alignment(original_vcf_rec, outfile):
     """
-    Output the original VCF entry when alignment have failed to pass all thresholds
+    Output the original or updated VCF entry to the provided output file.
     """
-    info = primary_group[0].query_name.split('|')
-    print('\t'.join(info[:2] + [info[4]] + info[2:4] + info[5:]), file=outfile)
+    print('\t'.join(original_vcf_rec), file=outfile)
 
 
 def link_supplementary(primary_group, supplementary_group):
@@ -216,39 +237,36 @@ def link_supplementary(primary_group, supplementary_group):
     return dict(primary_to_supplementary)
 
 
-def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome, filter_align_with_secondary,
-                     flank_length, summary_file):
+def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome,
+                     filter_align_with_secondary, flank_length, summary_file):
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
+
     with open(output_file, 'w') as outfile, open(out_failed_file, 'w') as out_failed:
         for primary_group, supplementary_group, secondary_group in group_reads(bam_file_path):
             counter['total'] += 1
             primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
+            # Retrieve the full VCF record from the bam vr tag
+            original_vcf_rec = primary_group[0].get_tag('vr').split('|^')
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
                     varpos, new_ref, new_alts, ops, failure_reason = \
-                        calculate_new_variant_definition(left_read, right_read, fasta)
+                        calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
                     if not failure_reason:
                         counter['Remapped'] += 1
-                        info = left_read.query_name.split('|')
-                        if info[7] != '.':
-                            info[7] += ';'.join(ops)
-                        else:
-                            info[7] = ';'.join(ops)
-                        outfile.write(
-                            '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (left_read.reference_name, varpos, info[4], new_ref,
-                                                                  ','.join(new_alts), info[5], info[6], info[7]))
+                        update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
+                        output_alignment(original_vcf_rec, outfile)
                     else:
                         # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
                         # novel reference allele are correct. So we skip them.
                         # TODO: add realignment confirmation see #14 and EVA-2417
                         counter[failure_reason] += 1
-                        output_failed_alignment(primary_group, out_failed)
+                        output_alignment(original_vcf_rec, out_failed)
                 else:
-                    output_failed_alignment(primary_group, out_failed)
+                    output_alignment(original_vcf_rec, out_failed)
             else:
-                output_failed_alignment(primary_group, out_failed)
+                output_alignment(original_vcf_rec, out_failed)
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
 
