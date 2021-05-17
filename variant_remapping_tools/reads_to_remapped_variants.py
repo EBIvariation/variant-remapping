@@ -247,7 +247,7 @@ def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome,
             counter['total'] += 1
             primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
             # Retrieve the full VCF record from the bam vr tag
-            original_vcf_rec = primary_group[0].get_tag('vr').split('|')
+            original_vcf_rec = primary_group[0].get_tag('vr').split('|^')
             if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
                 left_read, right_read = order_reads(primary_group, primary_to_supplementary)
                 if pass_aligned_filtering(left_read, right_read, counter):
