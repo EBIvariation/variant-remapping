@@ -124,7 +124,11 @@ process extractVariantInfoToFastaHeader {
 process alignWithMinimap {
 
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
+    // Retry on kill (exit status 130) with twice the amount of memory
+    memory { Math.max(file(params.newgenome).size() * 10, 2000000000) * task.attempt + ' B' }
+
+    errorStrategy { task.exitStatus == 130 ? 'retry' : 'terminate' }
+    maxRetries 3
 
     input:
         path "variant_read1.fa"

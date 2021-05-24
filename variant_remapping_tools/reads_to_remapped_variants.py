@@ -287,7 +287,6 @@ def main():
                         help='Length of the flanking region used.')
     parser.add_argument('--summary', type=str, required=True,
                         help='YAML files containing the summary metrics')
-
     parser.add_argument('-f', '--filter_align_with_secondary', action='store_true', default=False,
                         help='Filter out alignments that have one or several secondary alignments.')
     parser.add_argument('-n', '--newgenome', required=True, help='FASTA file of the target genome')

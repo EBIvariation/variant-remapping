@@ -39,6 +39,7 @@ if (!params.vcffile || !params.oldgenome || !params.outfile || !params.newgenome
 
 // basename and basedir of the output file to know how to name the output files
 outfile_basename = file(params.outfile).getName()
+outfile_basename_without_ext = file(params.outfile).getBaseName()
 outfile_dir = file(params.outfile).getParent()
 
 /*
@@ -86,14 +87,14 @@ include { process_split_reads; process_split_reads_mid; process_split_reads_long
 /*
  * Create the header for the output VCF
  */
-process buildHeader {
+process convertAndAddHeaderToVCF {
 
     input:
         path "variants_remapped_sorted.vcf"
         path "vcf_header.txt"
 
     output:
-        path "final_header.txt", emit: final_header
+        path "variants_remapped_sorted_with_header.vcf", emit: final_vcf_with_header
 
     """
     # Create list of contigs/chromosomes to be added to the header
@@ -113,24 +114,29 @@ process buildHeader {
     # Add the two headers together and add the column names
     cat temp_header.txt contigs.txt > final_header.txt
     tail -n 1 vcf_header.txt >> final_header.txt
+    cat final_header.txt variants_remapped_sorted.vcf > variants_remapped_sorted_with_header.vcf
     """
 }
 
 /*
- * Add header to output VCF and merge with reference allele file
+ * Add header to unmapped variant VCF records
  */
-process mergeHeaderAndContent {
+process mergeOriginalHeaderAndVCFAndOutput {
+
+    publishDir outfile_dir,
+        overwrite: true,
+        mode: "copy"
 
     input:
-        path "final_header.txt"
-        path "variants_remapped_sorted.vcf"
+        path "original_header.txt"
+        path "unmapped_variants.vcf"
 
     output:
-        path "vcf_out_with_header.vcf", emit: final_vcf_with_header
+        path "${outfile_basename_without_ext}_unmapped.vcf", emit: original_vcf_with_header
 
     """
     # Add header to the vcf file:
-    cat final_header.txt variants_remapped_sorted.vcf > vcf_out_with_header.vcf
+    cat original_header.txt unmapped_variants.vcf >  "${outfile_basename_without_ext}_unmapped.vcf"
     """
 }
 
@@ -154,7 +160,7 @@ process sortVCF {
 /*
  * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
  */
-process normalise {
+process normaliseAnOutput {
 
     publishDir outfile_dir,
         overwrite: true,
@@ -185,10 +191,10 @@ process outputStats {
         path "summary"
 
     output:
-        path "${outfile_basename}.yml"
+        path "${outfile_basename_without_ext}_counts.yml"
 
     """
-    ln -s summary "${outfile_basename}.yml"
+    ln -s summary "${outfile_basename_without_ext}_counts.yml"
     """
 }
 
@@ -223,15 +229,16 @@ process combineYaml {
 workflow finalise {
     take:
         variants_remapped
+        variants_unmapped
         vcf_header
         genome
         summary
 
     main:
-        buildHeader(variants_remapped, vcf_header)
-        mergeHeaderAndContent(buildHeader.out.final_header, variants_remapped)
-        sortVCF(mergeHeaderAndContent.out.final_vcf_with_header)
-        normalise(sortVCF.out.variants_remapped_sorted_gz, genome)
+        convertAndAddHeaderToVCF(variants_remapped, vcf_header)
+        mergeOriginalHeaderAndVCFAndOutput(vcf_header, variants_unmapped)
+        sortVCF(convertAndAddHeaderToVCF.out.final_vcf_with_header)
+        normaliseAnOutput(sortVCF.out.variants_remapped_sorted_gz, genome)
         outputStats(summary)
 }
 
@@ -279,7 +286,10 @@ workflow {
             process_split_reads_long.out.summary_yml,
         )
 
-        finalise(combineVCF.out.merge_vcf, storeVCFHeader.out.vcf_header, params.newgenome, combineYaml.out.merge_yml)
+        finalise(
+            combineVCF.out.merge_vcf, process_split_reads_long.out.variants_unmapped, storeVCFHeader.out.vcf_header,
+            params.newgenome, combineYaml.out.merge_yml
+        )
 }
 
 //process_with_bowtie
