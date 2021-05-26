@@ -145,7 +145,7 @@ class TestProcess(TestCase):
         vcf_rec = ['chr1', '48', '.', 'T', 'A']
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
             assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
-                   (48, 'C', ['A', 'T'], {'st': '+', 'rac': 'T-C', 'nra': None}, 'Novel Reference Allele')
+                   (48, 'C', ['A', 'T'], {'st': '+', 'rac': 'T-C', 'nra': None}, None)
 
         # Forward strand alignment for Deletion
         left_read = self.mk_read(reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
