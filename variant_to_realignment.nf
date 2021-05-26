@@ -25,8 +25,8 @@ process convertVCFToBed {
     #  - add all VCF fields separated by 2 characters pipe and caret (|^) to avoid impacting existing formatting of
     #    the VCF line. The sub is to protect the % character that would be interpreted by printf otherwise.
     awk -F '\\t' '{ if (!/^#/){ \
-                    printf $1"\\t"$2-1"\\t"$2"\\t"$4"\\t"$1; \
-                    for (i=2; i<=NF; i++){ sub(/%/, "%%", $i); printf "|^"$i }; print ""}; \
+                    printf $1"\\t"$2-1"\\t"$2"\\t"$1; \
+                    for (i=2; i<=NF; i++){ sub(/%/, "%%", $i); printf "|^"$i }; print "\\t"$4}; \
                   }' source.vcf \
                   > variants.bed
     '''
@@ -56,7 +56,7 @@ process flankingRegionBed {
         | bedtools slop  -g genome.chrom.sizes -l $flankingseq -r 0  > flanking_r1.bed
 
     # Adjust the start position of the flank to be one base downstream of the end of variant (\$4 is the reference allele)
-    awk 'BEGIN{OFS="\\t"}{ \$2=\$2+length(\$4); \$3=\$3+length(\$4); print \$0}' variants.bed \
+    awk 'BEGIN{OFS="\\t"}{ \$2=\$2+length(\$5); \$3=\$3+length(\$5); print \$0}' variants.bed \
         | bedtools slop  -g genome.chrom.sizes -l 0 -r $flankingseq  > flanking_r2.bed
     """
 }
@@ -107,7 +107,7 @@ process extractVariantInfoToFastaHeader {
     awk '{print ">" NR }' flanking_r1.bed > position.txt
 
     # Store position of the variant in the file
-    cut -f 5 flanking_r1.bed > vcf_fields.txt
+    cut -f 4 flanking_r1.bed > vcf_fields.txt
 
     # Paste the names, variant bases, then fasta sequences into a new file
     # A space will be inserted between the position and the vcf fields

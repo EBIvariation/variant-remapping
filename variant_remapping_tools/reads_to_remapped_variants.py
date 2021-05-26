@@ -99,7 +99,9 @@ def update_vcf_record(reference_name, varpos, new_ref, new_alts, operations, ori
             genotype_str_list = original_vcf_rec[genotype_i].split(':')
             if genotype_str_list[gt_index] == '1/1':
                 genotype_str_list[gt_index] = '0/0'
-                original_vcf_rec[genotype_i] = ':'.join(genotype_str_list)
+            elif 'nra' in operations and genotype_str_list[gt_index] == '0/1':
+                genotype_str_list[gt_index] = '1/2'
+            original_vcf_rec[genotype_i] = ':'.join(genotype_str_list)
 
 
 def fetch_bases(fasta, contig, start, length):
