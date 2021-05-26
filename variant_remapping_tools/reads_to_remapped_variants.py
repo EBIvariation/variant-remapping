@@ -63,7 +63,8 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         new_alts.append(old_ref_conv)
         operations['rac'] = old_ref_conv + '-' + new_ref
         operations['nra'] = None
-        failure_reason = 'Novel Reference Allele'
+        if len(old_ref_conv) != len(new_ref):
+            failure_reason = 'Novel Reference Allele length change'
 
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
