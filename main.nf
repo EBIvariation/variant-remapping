@@ -85,13 +85,13 @@ include { process_split_reads; process_split_reads_mid; process_split_reads_long
 
 
 /*
- * Create the header for the output VCF
+ * This process convert the original Header to the remapped header and concatenate it with the remapped VCF records
  */
-process convertAndAddHeaderToVCF {
+process generateRemappedVCF {
 
     input:
-        path "variants_remapped_sorted.vcf"
         path "vcf_header.txt"
+        path "variants_remapped_sorted.vcf"
 
     output:
         path "variants_remapped_sorted_with_header.vcf", emit: final_vcf_with_header
@@ -119,9 +119,9 @@ process convertAndAddHeaderToVCF {
 }
 
 /*
- * Add header to unmapped variant VCF records
+ * This process adds the original header to unmapped variant VCF records and output the results
  */
-process mergeOriginalHeaderAndVCFAndOutput {
+process generateUnmappedVCF {
 
     publishDir outfile_dir,
         overwrite: true,
@@ -235,9 +235,9 @@ workflow finalise {
         summary
 
     main:
-        convertAndAddHeaderToVCF(variants_remapped, vcf_header)
-        mergeOriginalHeaderAndVCFAndOutput(vcf_header, variants_unmapped)
-        sortVCF(convertAndAddHeaderToVCF.out.final_vcf_with_header)
+        generateUnmappedVCF(vcf_header, variants_unmapped)
+        generateRemappedVCF(vcf_header, variants_remapped)
+        sortVCF(generateRemappedVCF.out.final_vcf_with_header)
         normaliseAnOutput(sortVCF.out.variants_remapped_sorted_gz, genome)
         outputStats(summary)
 }

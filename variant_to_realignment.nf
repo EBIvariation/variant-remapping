@@ -7,7 +7,8 @@ nextflow.enable.dsl=2
 
 
 /*
- * Convert the VCF file to BED format.
+ * Convert the VCF file to BED format storing the VCF line in the "name" column and the reference allele in the
+ * "strand" column.
  */
 process convertVCFToBed {
 
@@ -33,7 +34,7 @@ process convertVCFToBed {
 }
 
 /*
- * Based on variants BED, generate the flanking regions BED files.
+ * Based on variants BED, generate the BED file for each flank.
  */
 process flankingRegionBed {
 
@@ -100,7 +101,7 @@ process extractVariantInfoToFastaHeader {
         path "variant_read1.out.fa", emit: variant_read1_with_info
         path "variant_read2.out.fa", emit: variant_read2_with_info
 
-    // Disable the string interpolation using single quotes
+    // Disable Nextflow string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
     '''
     # Store variant position in the file to have a unique name
