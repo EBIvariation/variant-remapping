@@ -25,7 +25,8 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     operations = {}
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
-                          right_read.reference_start - left_read.reference_end)
+                          right_read.reference_start - left_read.reference_end).upper()
+
     new_pos = left_read.reference_end + 1
 
     # 1. Handle reference strand change
@@ -69,7 +70,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
-        new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
+        new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1).upper()
         new_alts = [new_ref + alt for alt in new_alts]
         operations['zlr'] = None
 

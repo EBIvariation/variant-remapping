@@ -7,7 +7,8 @@ from unittest import TestCase
 
 
 from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, process_bam_file, \
-    calculate_new_variant_definition, order_reads, link_supplementary, pass_aligned_filtering, group_reads
+    calculate_new_variant_definition, order_reads, link_supplementary, pass_aligned_filtering, group_reads, \
+    update_vcf_record
 
 
 class TestProcess(TestCase):
@@ -166,6 +167,22 @@ class TestProcess(TestCase):
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='TTG'):
             assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
                    (48, 'TTG', ['G'], {'st': '-'}, None)
+
+    def test_update_vcf_record(self):
+        # Allele swap no genotype change
+        original_vcf_rec = ['chr1', '10', '.', 'A', 'T', '50', '.', '.', 'GT', '0/1']
+        update_vcf_record('1', 11, 'T', 'A', {'rac': 'A-T'}, original_vcf_rec)
+        assert original_vcf_rec == ['1', '11', '.', 'T', 'A', '50', '.', 'rac=A-T', 'GT', '0/1']
+
+        # Allele swap with genotype change
+        original_vcf_rec = ['chr1', '10', '.', 'A', 'T', '50', '.', '.', 'GT', '1/1']
+        update_vcf_record('1', 11, 'T', 'A', {'rac': 'A-T'}, original_vcf_rec)
+        assert original_vcf_rec == ['1', '11', '.', 'T', 'A', '50', '.', 'rac=A-T', 'GT', '0/0']
+
+        # Novel reference allele with genotype change
+        original_vcf_rec = ['chr1', '10', '.', 'A', 'T', '50', '.', '.', 'GT', '0/1']
+        update_vcf_record('1', 11, 'C', ['A', 'T'], {'rac': 'A-C', 'nra': None}, original_vcf_rec)
+        assert original_vcf_rec == ['1', '11', '.', 'C', 'A,T', '50', '.', 'rac=A-C;nra', 'GT', '1/2']
 
 
     @staticmethod
