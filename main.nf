@@ -64,6 +64,29 @@ process uncompressInputVCF {
             """
 }
 
+
+/*
+ * filter VCF file to remove variant too close the edges of chromosome because we can't get flanking regions
+ */
+process filterInputVCF {
+
+    input:
+        path "source.vcf"
+        path "genome_fai"
+
+    output:
+        path "filtered.vcf", emit: filtered_vcf_file
+
+    script:
+    """
+    awk '{ print \$1"\\t1\\t"\$2;}' genome_fai > edge_region.bed
+    bgzip source.vcf
+    bcftools index source.vcf.gz
+    bcftools filter --regions-file edge_region.bed  -o filtered.vcf source.vcf.gz
+    """
+}
+
+
 /*
  * Store the original VCF header for later use
  */
@@ -250,9 +273,10 @@ workflow {
         prepare_old_genome(params.oldgenome)
         prepare_new_genome(params.newgenome)
         uncompressInputVCF(params.vcffile)
+        filterInputVCF(uncompressInputVCF.out.vcf_file, prepare_old_genome.out.genome_fai)
         storeVCFHeader(uncompressInputVCF.out.vcf_file)
         process_split_reads(
-            uncompressInputVCF.out.vcf_file,
+            filterInputVCF.out.filtered_vcf_file,
             params.oldgenome,
             prepare_old_genome.out.genome_fai,
             prepare_old_genome.out.genome_chrom_sizes,

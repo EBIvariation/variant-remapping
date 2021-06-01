@@ -12,6 +12,7 @@ cat << EOT > "${SCRIPT_DIR}/resources/source.vcf"
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Consensus Genotype across all datasets with called genotype">
 ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
 #CHROM	POS	ID	REF	 ALT	QUAL 	FILTER	INFO	FORMAT	HG001
+chr1	1	.	C	T	50	PASS	.	GT:GQ	1/1:0
 chr1	48	.	C	A,T	50	PASS	COMMENT=NANANANANANANANANANANANANAN%ANANANANANANANANANANANANANANANANAN|ANANANANANANA&NANAN ANA\$NANANANANANANANANANANANANANANANANAN^ANANANANANANANANANANANANANANANANANANANANANANANANANANANANANANANANANA NANANANANANANANANANANANANABATMAN	GT:GQ	1/1:0
 chr1	98	.	C	CG	50	PASS	.	GT:GQ	1/1:0
 chr1	1078	.	G	A	50	PASS	.	GT	1/1
@@ -48,6 +49,8 @@ diff "${SCRIPT_DIR}/resources/expected_remap.vcf" <(grep -v '^##' "${SCRIPT_DIR}
 # Clean up after the test
 rm -rf work .nextflow* \
        ${SCRIPT_DIR}/resources/source.vcf \
-       ${SCRIPT_DIR}/resources/*remap.vcf* \
+       ${SCRIPT_DIR}/resources/remap.vcf \
+       ${SCRIPT_DIR}/resources/remap_counts.yml \
+       ${SCRIPT_DIR}/resources/remap_unmapped.vcf \
        ${SCRIPT_DIR}/resources/new_genome.fa.* \
        ${SCRIPT_DIR}/resources/genome.fa.fai
