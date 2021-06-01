@@ -28,7 +28,7 @@ process convertVCFToBed {
     #    otherwise. the sub replacing space is to prevent bedtools from using them as a field separator
     awk -F '\\t' '{ if (!/^#/){ \
                     printf $1"\\t"$2-1"\\t"$2"\\t"$1; \
-                    for (i=2; i<=NF; i++){ sub(/%/, "%%", $i); sub(/ /, "£€", $i); printf "|^"$i }; print "\\t"$4}; \
+                    for (i=2; i<=NF; i++){ gsub(/%/, "%%", $i); gsub(/ /, "£€", $i); printf "|^"$i }; print "\\t"$4}; \
                   }' source.vcf \
                   > variants.bed
     '''
