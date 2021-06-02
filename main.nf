@@ -76,13 +76,20 @@ process filterInputVCF {
 
     output:
         path "filtered.vcf", emit: filtered_vcf_file
+        path "kept.vcf", emit: kept_vcf_file
+        path "count.yml", emit: count_yml
 
     script:
     """
-    awk '{ print \$1"\\t1\\t"\$2;}' genome_fai > edge_region.bed
-    bgzip source.vcf
-    bcftools index source.vcf.gz
-    bcftools filter --regions-file edge_region.bed  -o filtered.vcf source.vcf.gz
+    awk '{ print \$1"\\t1\\t"\$2-1;}' genome_fai > center_regions.bed
+    awk '{ print \$1"\\t0\\t1"; print \$1"\\t"\$2-1"\\t"\$2;}' genome_fai > edge_regions.bed
+    # Bcftools sort needs the contigs to be set in the header or an index neither of which we can't garantee here.
+    # that's why we're using unix sort
+    awk '\$1 ~ /^#/ {print \$0;next} {print \$0 | "sort -k1,1 -k2,2n"}' source.vcf | tee >(wc -l > all_count.txt) | bgzip -c >  source_sorted.vcf.gz
+    bcftools index source_sorted.vcf.gz
+    bcftools filter --regions-file center_regions.bed  -o kept.vcf source_sorted.vcf.gz
+    bcftools filter --regions-file edge_regions.bed  source_sorted.vcf.gz | grep -v '^#' | tee filtered.vcf | wc -l > filtered_count.txt
+    cat <(cat all_count.txt | awk '{print "all: "\$1}') <(cat filtered_count.txt | awk '{print "filtered: "\$1}') > count.yml
     """
 }
 
@@ -221,6 +228,23 @@ process outputStats {
     """
 }
 
+/*
+ * Concatenate the unmapped variants
+ */
+process combineUnmappedVCF {
+    input:
+        path "variants1.vcf"
+        path "variants2.vcf"
+
+    output:
+        path "merge.vcf", emit: merge_vcf
+
+    """
+    cat variants1.vcf variants2.vcf > merge.vcf
+    """
+}
+
+
 process combineVCF {
     input:
         path "variants1.vcf"
@@ -236,6 +260,7 @@ process combineVCF {
 
 process combineYaml {
     input:
+        path "initial_yml"
         path "round1.yml"
         path "round2.yml"
         path "round3.yml"
@@ -244,7 +269,7 @@ process combineYaml {
         path "merge.yml", emit: merge_yml
 
     """
-    cat round1.yml round2.yml round3.yml > merge.yml
+    cat initial_yml round1.yml round2.yml round3.yml > merge.yml
     """
 }
 
@@ -266,9 +291,33 @@ workflow finalise {
 }
 
 
+//process_with_bowtie
+workflow process_with_bowtie {
+    main:
+        prepare_old_genome(params.oldgenome)
+        prepare_new_genome_bowtie(params.newgenome)
+        uncompressInputVCF(params.vcffile)
+        storeVCFHeader(uncompressInputVCF.out.vcf_file)
+        process_split_reads_with_bowtie(
+            uncompressInputVCF.out.vcf_file,
+            params.oldgenome,
+            prepare_old_genome.out.genome_fai,
+            prepare_old_genome.out.genome_chrom_sizes,
+            params.newgenome,
+            prepare_new_genome_bowtie.out.genome_fai,
+            prepare_new_genome_bowtie.out.bowtie_indexes
+        )
+        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header,
+                 params.newgenome, process_split_reads_with_bowtie.out.summary_yml)
+}
+
+
+
+
+
 // process_with_minimap
 // Workflow without a name is the default workflow that gets executed when the file is run through nextflow
-workflow {
+workflow  {
     main:
         prepare_old_genome(params.oldgenome)
         prepare_new_genome(params.newgenome)
@@ -276,7 +325,7 @@ workflow {
         filterInputVCF(uncompressInputVCF.out.vcf_file, prepare_old_genome.out.genome_fai)
         storeVCFHeader(uncompressInputVCF.out.vcf_file)
         process_split_reads(
-            filterInputVCF.out.filtered_vcf_file,
+            filterInputVCF.out.kept_vcf_file,
             params.oldgenome,
             prepare_old_genome.out.genome_fai,
             prepare_old_genome.out.genome_chrom_sizes,
@@ -299,39 +348,24 @@ workflow {
             params.newgenome,
             prepare_new_genome.out.genome_fai
         )
+        combineUnmappedVCF(
+            filterInputVCF.out.filtered_vcf_file,
+            process_split_reads_long.out.variants_unmapped,
+        )
         combineVCF(
             process_split_reads.out.variants_remapped,
             process_split_reads_mid.out.variants_remapped,
             process_split_reads_long.out.variants_remapped
         )
         combineYaml(
+            filterInputVCF.out.count_yml,
             process_split_reads.out.summary_yml,
             process_split_reads_mid.out.summary_yml,
-            process_split_reads_long.out.summary_yml,
+            process_split_reads_long.out.summary_yml
         )
 
         finalise(
-            combineVCF.out.merge_vcf, process_split_reads_long.out.variants_unmapped, storeVCFHeader.out.vcf_header,
+            combineVCF.out.merge_vcf, combineUnmappedVCF.out.merge_vcf, storeVCFHeader.out.vcf_header,
             params.newgenome, combineYaml.out.merge_yml
         )
-}
-
-//process_with_bowtie
-workflow process_with_bowtie {
-    main:
-        prepare_old_genome(params.oldgenome)
-        prepare_new_genome_bowtie(params.newgenome)
-        uncompressInputVCF(params.vcffile)
-        storeVCFHeader(uncompressInputVCF.out.vcf_file)
-        process_split_reads_with_bowtie(
-            uncompressInputVCF.out.vcf_file,
-            params.oldgenome,
-            prepare_old_genome.out.genome_fai,
-            prepare_old_genome.out.genome_chrom_sizes,
-            params.newgenome,
-            prepare_new_genome_bowtie.out.genome_fai,
-            prepare_new_genome_bowtie.out.bowtie_indexes
-        )
-        finalise(process_split_reads_with_bowtie.out.variants_remapped, storeVCFHeader.out.vcf_header,
-                 params.newgenome, process_split_reads_with_bowtie.out.summary_yml)
 }
