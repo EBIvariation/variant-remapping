@@ -135,8 +135,8 @@ process alignWithMinimap {
     maxRetries 3
 
     input:
-        path "variant_read1.fa"
-        path "variant_read2.fa"
+        // reads contains a list of 2 files (first and second read)
+        path(reads)
         // indexing is done on the fly so get the genome directly
         path "genome.fa"
         val flanklength
@@ -157,7 +157,7 @@ process alignWithMinimap {
         # the awk script will convert this comment in valid SAM tag
         minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
                  -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 -y \
-                 -a genome.fa variant_read1.fa variant_read2.fa | \
+                 -a genome.fa ${reads[0]} ${reads[1]} | \
                  awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
                  samtools view -bS - > reads_aligned.bam
         """
@@ -165,7 +165,7 @@ process alignWithMinimap {
         """
         minimap2 -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
                  --secondary=yes -N 2 -y \
-                 -a genome.fa variant_read1.fa variant_read2.fa | \
+                 -a genome.fa ${reads[0]} ${reads[1]} | \
                  awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
                  samtools view -bS - > reads_aligned.bam
         """
@@ -221,7 +221,7 @@ process alignWithBowtie {
 process readsToRemappedVariants {
 
     input:
-        path "reads_aligned.bam"
+        path "reads.*.bam"
         path "genome.fa"
         val flank_length
         val filter_align_with_secondary
@@ -235,14 +235,14 @@ process readsToRemappedVariants {
         if (filter_align_with_secondary)
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads*.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
             """
         else
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads_aligned.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads*.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml
            """
@@ -259,6 +259,7 @@ workflow process_split_reads_generic {
         new_genome_fa_fai
         flank_length
         filter_align_with_secondary
+        chunck_size
 
     main:
         convertVCFToBed(source_vcf)
@@ -271,15 +272,24 @@ workflow process_split_reads_generic {
             flankingRegionBed.out.flanking_r1_bed, flankingRegionBed.out.flanking_r2_bed,
             flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
         )
+
+        // This will split the fasta file into chunks
+        // mix creates a single channel with both file
+        // toList create a single entry channel with the list of two file
+        // splitFasta split the two files in chunks
+        split_reads = extractVariantInfoToFastaHeader.out.variant_read1_with_info
+          .mix(extractVariantInfoToFastaHeader.out.variant_read2_with_info)
+          .toList()
+          .splitFasta(by: chunck_size, file: true, elem: [0,1])
+
         alignWithMinimap(
-            extractVariantInfoToFastaHeader.out.variant_read1_with_info,
-            extractVariantInfoToFastaHeader.out.variant_read2_with_info,
+            split_reads,
             new_genome_fa,
             flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
         readsToRemappedVariants(
-            sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
+            sortByName.out.reads_aligned_sorted_bam.collect(), new_genome_fa,
             flank_length, filter_align_with_secondary
         )
 
@@ -300,9 +310,11 @@ workflow process_split_reads {
     main:
         flank_length = 50
         filter_align_with_secondary = true
+        chunck_size = 10000000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
-            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
+            chunck_size
         )
     emit:
         variants_remapped = process_split_reads_generic.out.variants_remapped
@@ -323,9 +335,11 @@ workflow process_split_reads_mid {
     main:
         flank_length = 2000
         filter_align_with_secondary = true
+        chunck_size = 1000000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
-            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
+            chunck_size
         )
     emit:
         variants_remapped = process_split_reads_generic.out.variants_remapped
@@ -346,9 +360,11 @@ workflow process_split_reads_long {
     main:
         flank_length = 50000
         filter_align_with_secondary = false
+        chunck_size = 100000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
-            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary
+            new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
+            chunck_size
         )
     emit:
         variants_remapped = process_split_reads_generic.out.variants_remapped
