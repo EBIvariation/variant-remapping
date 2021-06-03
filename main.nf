@@ -83,13 +83,9 @@ process filterInputVCF {
     """
     awk '{ print \$1"\\t1\\t"\$2-1;}' genome_fai > center_regions.bed
     awk '{ print \$1"\\t0\\t1"; print \$1"\\t"\$2-1"\\t"\$2;}' genome_fai > edge_regions.bed
-    # Bcftools sort needs the contigs to be set in the header or an index neither of which we can't garantee here.
-    # that's why we're using unix sort
-    awk '\$1 ~ /^#/ {print \$0;next} {print \$0 | "sort -k1,1 -k2,2n"}' source.vcf | tee >(wc -l > all_count.txt) | bgzip -c >  source_sorted.vcf.gz
-    bcftools index source_sorted.vcf.gz
-    bcftools filter --regions-file center_regions.bed  -o kept.vcf source_sorted.vcf.gz
-    bcftools filter --regions-file edge_regions.bed  source_sorted.vcf.gz | grep -v '^#' | tee filtered.vcf | wc -l > filtered_count.txt
-    cat <(cat all_count.txt | awk '{print "all: "\$1}') <(cat filtered_count.txt | awk '{print "filtered: "\$1}') > count.yml
+    bcftools filter --targets-file center_regions.bed source.vcf | tee kept.vcf |  grep -cv '^#' > all_count.txt
+    bcftools filter --targets-file edge_regions.bed  source.vcf | grep -v '^#' | tee filtered.vcf | wc -l > filtered_count.txt
+    cat <(cat *_count.txt | awk '{sum += \$1} END{print "all: "sum}') <(cat filtered_count.txt | awk '{print "filtered: "\$1}') > count.yml
     """
 }
 
