@@ -92,6 +92,8 @@ process flankingRegionFasta {
  */
 process extractVariantInfoToFastaHeader {
 
+    memory 8GB
+
     input:  
         path "flanking_r1.bed"
         path "flanking_r2.bed"
@@ -108,7 +110,7 @@ process extractVariantInfoToFastaHeader {
     # Store variant position in the file to have a unique name
     awk '{print ">" NR }' flanking_r1.bed > position.txt
 
-    # Store position of the variant in the file
+    # Store position of the variant in the file and replace '£€' with the original whitespace from convertVCFToBed
     cut -f 4 flanking_r1.bed | sed 's/£€/ /g' > vcf_fields.txt
 
     # Paste the names, variant bases, then fasta sequences into a new file
