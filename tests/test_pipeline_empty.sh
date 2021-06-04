@@ -24,6 +24,7 @@ cat << EOT > "${SCRIPT_DIR}/resources/source_empty.vcf"
 EOT
 
 nextflow run ${SOURCE_DIR}/main.nf \
+-config ${SCRIPT_DIR}/resources/config.yml \
 --oldgenome ${SCRIPT_DIR}/resources/genome.fa \
 --newgenome ${SCRIPT_DIR}/resources/new_genome.fa \
 --vcffile ${SCRIPT_DIR}/resources/source_empty.vcf \

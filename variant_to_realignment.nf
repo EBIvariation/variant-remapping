@@ -92,7 +92,7 @@ process flankingRegionFasta {
  */
 process extractVariantInfoToFastaHeader {
 
-    memory '8GB'
+    memory '6GB'
 
     input:  
         path "flanking_r1.bed"
