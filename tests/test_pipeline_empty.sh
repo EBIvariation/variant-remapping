@@ -49,6 +49,7 @@ asserteq `cat ${SCRIPT_DIR}/resources/remap_empty_counts.yml | grep 'filtered:' 
 # Clean up after the test
 rm -rf work .nextflow* \
        ${SCRIPT_DIR}/resources/source_empty.vcf \
+       ${SCRIPT_DIR}/resources/expected_remap.vcf \
        ${SCRIPT_DIR}/resources/remap_empty.vcf \
        ${SCRIPT_DIR}/resources/remap_empty_counts.yml \
        ${SCRIPT_DIR}/resources/remap_empty_unmapped.vcf \
