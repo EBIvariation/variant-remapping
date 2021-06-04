@@ -273,15 +273,18 @@ workflow process_split_reads_generic {
             flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
         )
 
-        // This will split the fasta file into chunks
         // mix creates a single channel with both file
         // toList create a single entry channel with the list of two file
-        // splitFasta split the two files in chunks
-        split_reads = extractVariantInfoToFastaHeader.out.variant_read1_with_info
-          .mix(extractVariantInfoToFastaHeader.out.variant_read2_with_info)
+        split_reads = extractVariantInfoToFastaHeader.out.variant_read2_with_info
+          .mix(extractVariantInfoToFastaHeader.out.variant_read1_with_info)
           .toList()
-          .splitFasta(by: chunck_size, file: true, elem: [0,1])
 
+        // splitFasta split the two files in chunks only if the input fasta is not empty
+        extractVariantInfoToFastaHeader.out.variant_read1_with_info.subscribe {
+            if (it.size() > 0) {
+                split_reads = split_reads.splitFasta(by: chunck_size, file: true, elem: [0,1])
+            }
+        }
         alignWithMinimap(
             split_reads,
             new_genome_fa,
