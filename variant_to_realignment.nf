@@ -101,8 +101,7 @@ process extractVariantInfoToFastaHeader {
         path "variants_read2.fa"
 
     output:
-        path "variant_read1.out.fa", emit: variant_read1_with_info
-        path "variant_read2.out.fa", emit: variant_read2_with_info
+        path "interleaved.fa", emit: interleaved_fasta
 
     // Disable Nextflow string interpolation using single quotes
     // https://www.nextflow.io/docs/latest/script.html#string-interpolation
@@ -118,8 +117,33 @@ process extractVariantInfoToFastaHeader {
     # Then a newline is inserted between the vcf fields and the sequence
     # The vcf fields are regarded as comment to the fasta entry.
     paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read1.fa) > variant_read1.out.fa
-    paste -d ' \\n' position.txt vcf_fields.txt <(grep -v '^>' variants_read2.fa) > variant_read2.out.fa
+    paste -d '\\n' position.txt <(grep -v '^>' variants_read2.fa) > variant_read2.out.fa
+
+    paste variant_read1.out.fa variant_read2.out.fa | paste - - | awk -F "\\t" 'BEGIN {OFS="\\n"} {print $1,$3,$2,$4}' > interleaved.fa
     '''
+}
+
+/*
+ * Split fasta entries into multiple chunks
+ */
+process split_fasta {
+
+    input:
+        path interleaved_fasta
+        val chunk_size
+
+    output:
+        path("read_chunk-*"), emit: read_split
+
+    script:
+    if (interleaved_fasta.size() > 0)
+        """
+        split -a 5 -d -l ${chunk_size * 4} ${interleaved_fasta} read_chunk-
+        """
+    else
+        """
+        ln -s ${interleaved_fasta} read_chunk-00001
+        """
 }
 
 /*
@@ -135,8 +159,8 @@ process alignWithMinimap {
     maxRetries 3
 
     input:
-        // reads contains a list of 2 files (first and second read)
-        path(reads)
+        // reads contains paired interleaved (first and second read in the same file)
+        each path(reads)
         // indexing is done on the fly so get the genome directly
         path "genome.fa"
         val flanklength
@@ -157,7 +181,7 @@ process alignWithMinimap {
         # the awk script will convert this comment in valid SAM tag
         minimap2 -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
                  -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 -y \
-                 -a genome.fa ${reads[0]} ${reads[1]} | \
+                 -a genome.fa ${reads} | \
                  awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
                  samtools view -bS - > reads_aligned.bam
         """
@@ -165,7 +189,7 @@ process alignWithMinimap {
         """
         minimap2 -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
                  --secondary=yes -N 2 -y \
-                 -a genome.fa ${reads[0]} ${reads[1]} | \
+                 -a genome.fa ${reads} | \
                  awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
                  samtools view -bS - > reads_aligned.bam
         """
@@ -221,7 +245,7 @@ process alignWithBowtie {
 process readsToRemappedVariants {
 
     input:
-        path "reads.*.bam"
+        path "reads*.bam"
         path "genome.fa"
         val flank_length
         val filter_align_with_secondary
@@ -259,7 +283,7 @@ workflow process_split_reads_generic {
         new_genome_fa_fai
         flank_length
         filter_align_with_secondary
-        chunck_size
+        chunk_size
 
     main:
         convertVCFToBed(source_vcf)
@@ -273,24 +297,19 @@ workflow process_split_reads_generic {
             flankingRegionFasta.out.variants_read1, flankingRegionFasta.out.variants_read2
         )
 
-        // mix creates a single channel with both file
-        // toList create a single entry channel with the list of two file
-        split_reads = extractVariantInfoToFastaHeader.out.variant_read2_with_info
-          .mix(extractVariantInfoToFastaHeader.out.variant_read1_with_info)
-          .toList()
+        split_fasta(
+            extractVariantInfoToFastaHeader.out.interleaved_fasta,
+            chunk_size
+        )
 
-        // splitFasta split the two files in chunks only if the input fasta is not empty
-        extractVariantInfoToFastaHeader.out.variant_read1_with_info.subscribe {
-            if (it.size() > 0) {
-                split_reads = split_reads.splitFasta(by: chunck_size, file: true, elem: [0,1])
-            }
-        }
+
         alignWithMinimap(
-            split_reads,
+            split_fasta.out.read_split,
             new_genome_fa,
             flank_length
         )
         sortByName(alignWithMinimap.out.reads_aligned_bam)
+        // Collect all the bam files in the next step
         readsToRemappedVariants(
             sortByName.out.reads_aligned_sorted_bam.collect(), new_genome_fa,
             flank_length, filter_align_with_secondary
@@ -313,11 +332,11 @@ workflow process_split_reads {
     main:
         flank_length = 50
         filter_align_with_secondary = true
-        chunck_size = 10000000
+        chunck_size = 5000000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
             new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
-            chunck_size
+            chunk_size
         )
     emit:
         variants_remapped = process_split_reads_generic.out.variants_remapped
@@ -338,11 +357,11 @@ workflow process_split_reads_mid {
     main:
         flank_length = 2000
         filter_align_with_secondary = true
-        chunck_size = 1000000
+        chunk_size = 500000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
             new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
-            chunck_size
+            chunk_size
         )
     emit:
         variants_remapped = process_split_reads_generic.out.variants_remapped
@@ -363,11 +382,11 @@ workflow process_split_reads_long {
     main:
         flank_length = 50000
         filter_align_with_secondary = false
-        chunck_size = 100000
+        chunk_size = 50000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
             new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
-            chunck_size
+            chunk_size
         )
     emit:
         variants_remapped = process_split_reads_generic.out.variants_remapped

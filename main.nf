@@ -179,7 +179,7 @@ process sortVCF {
 
     """
     bgzip variants_remapped.vcf
-    bcftools sort -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
+    bcftools sort -T . -o variants_remapped_sorted.vcf.gz -Oz variants_remapped.vcf.gz
     """
 }
 
