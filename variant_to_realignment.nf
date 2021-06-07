@@ -332,7 +332,7 @@ workflow process_split_reads {
     main:
         flank_length = 50
         filter_align_with_secondary = true
-        chunck_size = 5000000
+        chunk_size = 5000000
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
             new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
