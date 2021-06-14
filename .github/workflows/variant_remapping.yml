@@ -32,8 +32,9 @@ jobs:
         $CONDA/bin/conda run pip install -q -r requirements.txt
 
     - name: Test nextflow workflow
-      run:
+      run: |
         $CONDA/bin/conda run tests/test_pipeline.sh
+        $CONDA/bin/conda run tests/test_pipeline_empty.sh
 
     - name: Test with pytest
       run:

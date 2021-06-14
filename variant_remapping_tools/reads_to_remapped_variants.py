@@ -25,7 +25,8 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     operations = {}
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
-                          right_read.reference_start - left_read.reference_end)
+                          right_read.reference_start - left_read.reference_end).upper()
+
     new_pos = left_read.reference_end + 1
 
     # 1. Handle reference strand change
@@ -63,12 +64,13 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         new_alts.append(old_ref_conv)
         operations['rac'] = old_ref_conv + '-' + new_ref
         operations['nra'] = None
-        failure_reason = 'Novel Reference Allele'
+        if len(old_ref_conv) != len(new_ref):
+            failure_reason = 'Novel Reference Allele length change'
 
     # 3. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
-        new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1)
+        new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1).upper()
         new_alts = [new_ref + alt for alt in new_alts]
         operations['zlr'] = None
 
@@ -98,7 +100,9 @@ def update_vcf_record(reference_name, varpos, new_ref, new_alts, operations, ori
             genotype_str_list = original_vcf_rec[genotype_i].split(':')
             if genotype_str_list[gt_index] == '1/1':
                 genotype_str_list[gt_index] = '0/0'
-                original_vcf_rec[genotype_i] = ':'.join(genotype_str_list)
+            elif 'nra' in operations and genotype_str_list[gt_index] == '0/1':
+                genotype_str_list[gt_index] = '1/2'
+            original_vcf_rec[genotype_i] = ':'.join(genotype_str_list)
 
 
 def fetch_bases(fasta, contig, start, length):
@@ -237,36 +241,37 @@ def link_supplementary(primary_group, supplementary_group):
     return dict(primary_to_supplementary)
 
 
-def process_bam_file(bam_file_path, output_file, out_failed_file, new_genome,
+def process_bam_file(bam_file_paths, output_file, out_failed_file, new_genome,
                      filter_align_with_secondary, flank_length, summary_file):
     counter = Counter()
     fasta = pysam.FastaFile(new_genome)
 
     with open(output_file, 'w') as outfile, open(out_failed_file, 'w') as out_failed:
-        for primary_group, supplementary_group, secondary_group in group_reads(bam_file_path):
-            counter['total'] += 1
-            primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
-            # Retrieve the full VCF record from the bam vr tag
-            original_vcf_rec = primary_group[0].get_tag('vr').split('|^')
-            if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
-                left_read, right_read = order_reads(primary_group, primary_to_supplementary)
-                if pass_aligned_filtering(left_read, right_read, counter):
-                    varpos, new_ref, new_alts, ops, failure_reason = \
-                        calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
-                    if not failure_reason:
-                        counter['Remapped'] += 1
-                        update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
-                        output_alignment(original_vcf_rec, outfile)
+        for bam_file_path in bam_file_paths:
+            for primary_group, supplementary_group, secondary_group in group_reads(bam_file_path):
+                counter['total'] += 1
+                primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
+                # Retrieve the full VCF record from the bam vr tag
+                original_vcf_rec = primary_group[0].get_tag('vr').split('|^')
+                if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
+                    left_read, right_read = order_reads(primary_group, primary_to_supplementary)
+                    if pass_aligned_filtering(left_read, right_read, counter):
+                        varpos, new_ref, new_alts, ops, failure_reason = \
+                            calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
+                        if not failure_reason:
+                            counter['Remapped'] += 1
+                            update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
+                            output_alignment(original_vcf_rec, outfile)
+                        else:
+                            # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
+                            # novel reference allele are correct. So we skip them.
+                            # TODO: add realignment confirmation see #14 and EVA-2417
+                            counter[failure_reason] += 1
+                            output_alignment(original_vcf_rec, out_failed)
                     else:
-                        # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
-                        # novel reference allele are correct. So we skip them.
-                        # TODO: add realignment confirmation see #14 and EVA-2417
-                        counter[failure_reason] += 1
                         output_alignment(original_vcf_rec, out_failed)
                 else:
                     output_alignment(original_vcf_rec, out_failed)
-            else:
-                output_alignment(original_vcf_rec, out_failed)
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
 
@@ -277,7 +282,7 @@ def main():
                    'separate file.')
 
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('-i', '--bam', type=str, required=True,
+    parser.add_argument('-i', '--bams', type=str, required=True, nargs='+',
                         help='Input BAM file with remapped flanking regions')
     parser.add_argument('-o', '--outfile', type=str, required=True,
                         help='Output VCF file with remapped variants')
@@ -293,7 +298,7 @@ def main():
     args = parser.parse_args()
 
     process_bam_file(
-        bam_file_path=args.bam,
+        bam_file_paths=args.bams,
         output_file=args.outfile,
         out_failed_file=args.out_failed_file,
         new_genome=args.newgenome,
