@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 import argparse
+import time
 from argparse import RawTextHelpFormatter
 from collections import Counter, defaultdict
 
