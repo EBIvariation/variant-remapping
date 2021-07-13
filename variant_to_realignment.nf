@@ -272,7 +272,7 @@ process readsToRemappedVariants {
 }
 
 /*
- * Take the reads and process them to get the remapped variants
+ * Gather step for remapped and unmapped variants and the summary yaml file
  *
  */
 process merge_variants {
