@@ -240,12 +240,11 @@ process alignWithBowtie {
 
 /*
  * Take the reads and process them to get the remapped variants
- *
  */
 process readsToRemappedVariants {
 
     input:
-        path "reads*.bam"
+        path "reads.bam"
         path "genome.fa"
         val flank_length
         val filter_align_with_secondary
@@ -259,7 +258,7 @@ process readsToRemappedVariants {
         if (filter_align_with_secondary)
             """
             # Ensure that we will use the reads_to_remapped_variants.py from this repo
-            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads*.bam \
+            ${baseDir}/variant_remapping_tools/reads_to_remapped_variants.py -i reads.bam \
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml --filter_align_with_secondary
             """
@@ -270,8 +269,31 @@ process readsToRemappedVariants {
                 -o variants_remapped.vcf  --newgenome genome.fa --out_failed_file variants_unmapped.vcf \
                 --flank_length $flank_length --summary summary.yml
            """
+}
+
+/*
+ * Gather step for remapped and unmapped variants and the summary yaml file
+ *
+ */
+process merge_variants {
+    input:
+        path "remapped*.vcf"
+        path "unmapped*.vcf"
+        path "summary*.yml"
+
+    output:
+       path "variants_remapped.vcf", emit: variants_remapped
+       path "variants_unmapped.vcf", emit: variants_unmapped
+       path "output_summary.yml", emit: summary_yml
+
+    """
+    cat remapped*.vcf > variants_remapped.vcf
+    cat unmapped*.vcf > variants_unmapped.vcf
+    ${baseDir}/variant_remapping_tools/merge_yaml.py --input summary*.yml --output output_summary.yml
+    """
 
 }
+
 
 workflow process_split_reads_generic {
     take:
@@ -311,14 +333,19 @@ workflow process_split_reads_generic {
         sortByName(alignWithMinimap.out.reads_aligned_bam)
         // Collect all the bam files in the next step
         readsToRemappedVariants(
-            sortByName.out.reads_aligned_sorted_bam.collect(), new_genome_fa,
+            sortByName.out.reads_aligned_sorted_bam, new_genome_fa,
             flank_length, filter_align_with_secondary
+        )
+        merge_variants(
+            readsToRemappedVariants.out.variants_remapped.collect(),
+            readsToRemappedVariants.out.variants_unmapped.collect(),
+            readsToRemappedVariants.out.summary_yml.collect()
         )
 
     emit:
-        variants_remapped = readsToRemappedVariants.out.variants_remapped
-        variants_unmapped = readsToRemappedVariants.out.variants_unmapped
-        summary_yml = readsToRemappedVariants.out.summary_yml
+        variants_remapped = merge_variants.out.variants_remapped
+        variants_unmapped = merge_variants.out.variants_unmapped
+        summary_yml = merge_variants.out.summary_yml
 }
 
 workflow process_split_reads {
@@ -332,7 +359,7 @@ workflow process_split_reads {
     main:
         flank_length = 50
         filter_align_with_secondary = true
-        chunk_size = 5000000
+        chunk_size = 2
         process_split_reads_generic(
             source_vcf, old_genome_fa, old_genome_fa_fai, old_genome_chrom_sizes,
             new_genome_fa, new_genome_fa_fai, flank_length, filter_align_with_secondary,
