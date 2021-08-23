@@ -29,7 +29,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
                           right_read.reference_start - left_read.reference_end).upper()
 
     if len(set(new_ref).difference(nucleotide_alphabet)) != 0 :
-        failure_reason = 'Reference Allele not in non ACGT'
+        failure_reason = 'Reference Allele not in ACGT'
 
     new_pos = left_read.reference_end + 1
 
