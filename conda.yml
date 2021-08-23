@@ -4,10 +4,8 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - bedtools=2.29.2
-  - bowtie2=2.4.1
-  - minimap2=2.17
-  - samtools=1.9
-  - bcftools=1.9
-  - bedops=2.4.39
-  - tabix=0.2.6
+  - bedtools
+  - minimap2
+  - samtools
+  - bcftools
+  - tabix

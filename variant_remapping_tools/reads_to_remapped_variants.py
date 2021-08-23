@@ -8,6 +8,7 @@ from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 import pysam
 
+nucleotide_alphabet = {'A', 'T', 'C', 'G'}
 
 def reverse_complement(sequence):
     return str(Seq(sequence, generic_dna).reverse_complement())
@@ -26,6 +27,9 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     # Define new ref and new pos
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
                           right_read.reference_start - left_read.reference_end).upper()
+
+    if len(set(new_ref).difference(nucleotide_alphabet)) != 0 :
+        failure_reason = 'Reference Allele not in ACGT'
 
     new_pos = left_read.reference_end + 1
 
