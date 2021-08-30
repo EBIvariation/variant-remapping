@@ -33,6 +33,7 @@ mkdir -p ${GENOME_DIR}/hs37d5
 cd ${GENOME_DIR}/hs37d5
 wget --no-check-certificate https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
 gzip -dk hs37d5.fa.gz
+samtools faidx hs37d5.fa
 ```
 
 GRCh38 reference with no ALT loci: 
@@ -189,7 +190,7 @@ singularity exec \
     ${SINGULARITY_DIR}/hap.py.simg \
     /opt/hap.py/bin/hap.py  \
         /giab/NA12878/GRCh38/HG001_GRCh38_Fake_Genotypes_shared.vcf.gz \
-        /remapping/GRCh37_to_GRCh38/NA12878_f50_s0.6_d0.04_pre_final_vcf_fixed.vcf.gz \
+        /remapping/GRCh37_to_GRCh38/NA12878.vcf \
         -f /giab/NA12878/GRCh38/HG001_GRCh38_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel_noCENorHET7.bed \
         -r /genomes/GRCh38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna \
         -o /remapping/GRCh37_to_GRCh38/hap.py_assessement \
@@ -204,7 +205,7 @@ singularity exec \
     ${SINGULARITY_DIR}/hap.py.simg \
     /opt/hap.py/bin/hap.py  \
         /giab/NA12878/GRCh37/HG001_GRCh37_Fake_Genotypes_shared.vcf.gz \
-        /remapping/GRCh38_to_GRCh37/NA12878_f50_s0.6_d0.04_pre_final_vcf_fixed.vcf.gz \
+        /remapping/GRCh38_to_GRCh37/NA12878.vcf \
         -f /giab/NA12878/GRCh37/HG001_GRCh37_GIAB_highconf_CG-IllFB-IllGATKHC-Ion-10X-SOLID_CHROM1-X_v.3.3.2_highconf_nosomaticdel.bed \
         -r /genomes/hs37d5/hs37d5.fa \
         -o /remapping/GRCh38_to_GRCh37/hap.py_assessement \
