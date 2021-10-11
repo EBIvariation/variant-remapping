@@ -25,6 +25,8 @@ Download, manually install the following program and make sure the executable ar
 - [samtools](http://www.htslib.org/download/)
 - [bedtools](https://bedtools.readthedocs.io/en/latest/)
 - [bcftools](http://www.htslib.org/download/)
+- [htslib](http://www.htslib.org/download/)
+- [minimap2](https://github.com/lh3/minimap2)
 - [Python](https://www.python.org/downloads/)
 
 Then run
@@ -34,9 +36,10 @@ pip install -r requirements.txt
 ```
 
 ## Testing the installation
-Run the test script to check that you have all the right dependencies installed properly 
+Run test scripts to check that you have all the right dependencies installed properly 
 ```bash
 tests/test_pipeline.sh
+tests/test_pipeline_empty.sh
 ```
 
 ## Executing the pipeline
