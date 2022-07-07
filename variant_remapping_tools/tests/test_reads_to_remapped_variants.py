@@ -187,6 +187,47 @@ class TestProcess(TestCase):
             assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
                    (46, 'ACATA', ['A', 'ACACA'], {'st': '-', 'rac': 'ACACA-ACATA', 'nra': 'ACACA'}, None)
 
+        #  reverse strand alignment for Insertion
+        # For insertion there cannot be a reference allele change on the negative strand because the reference allele
+        # variant:  C -> CTGTG
+        # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
+        # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
+
+        #                read 2              read 1
+        #          <----------------****G<--------------
+        # NEW REF  DDDDDDDDDDDDDDDDA----GUUUUUUUUUUUUUUU
+        # NEW ALT  DDDDDDDDDDDDDDDDACACAGUUUUUUUUUUUUUUU
+        # variant:  A -> ACACA
+        left_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=1,
+                                 reference_end=46, is_reverse=True)
+        right_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=50,
+                                  reference_end=110, is_reverse=True)
+        vcf_rec = ['chr1', '48', '.', 'C', 'CTGTG']
+        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases',
+                   side_effect=['G', 'A']):
+            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
+                   (46, 'A', ['ACACA'], {'st': '-'}, None)
+
+        # Forward strand alignment for Insertion
+        # Reference context base changes should not create a reference allele change because it's not part of the variant.
+        # variant:  C -> CTGTG
+        # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
+        # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
+
+        #                read 1              read 2
+        #          ---------------->****<--------------
+        # NEW REF  UUUUUUUUUUUUUUUUUT----DDDDDDDDDDDDDDD
+        # NEW ALT  UUUUUUUUUUUUUUUUUTTGTGDDDDDDDDDDDDDDD
+        # variant:  C -> CTGTG
+        left_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=1,
+                                 reference_end=46, is_reverse=False)
+        right_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=50,
+                                  reference_end=110, is_reverse=False)
+        vcf_rec = ['chr1', '48', '.', 'C', 'CTGTG']
+        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='T'):
+            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
+                   (47, 'T', ['TTGTG'], {'st': '+'}, None)
+
     def test_update_vcf_record(self):
         # Allele swap no genotype change
         original_vcf_rec = ['chr1', '10', '.', 'A', 'T', '50', '.', '.', 'GT', '0/1']

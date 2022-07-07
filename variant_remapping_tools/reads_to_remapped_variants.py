@@ -45,16 +45,6 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
         operations['st'] = '-'
-        #  if it is a deletion, the context base of the ref and alts needs to be removed and replaced with the one
-        #  uptream
-        if len(old_ref) > min([len(alt) for alt in old_alts]):
-            new_pos -= 1
-            new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, len(new_ref)).upper()
-            contexbase = new_ref[0]
-            old_alt_conv = [contexbase + alt[:-1] for alt in old_alt_conv]
-            # also change the old_ref_conv for consistency but it assumes that the base context base downstream
-            # of the variant was the same in the old genome
-            old_ref_conv = contexbase + old_ref_conv[:-1]
     else:
         # This case should be handled by the filtering but raise just in case...
         error_msg = (f'Impossible read configuration: '
@@ -64,7 +54,25 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
                      f'read2 position: {right_read.pos}')
         raise ValueError(error_msg)
 
-    # 2. Assign new allele sequences
+    # 2. In the case of insertion or deletions we need to ensure the context base are updated correctly
+    if any([len(old_ref) != len(alt) for alt in old_alts]):
+        # On the negative strand  the context base of the ref and alts needs to be removed
+        #  and replaced with the one uptream
+        if operations['st'] == '-':
+            new_pos -= 1
+            new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, len(new_ref)).upper()
+            contexbase = new_ref[0]
+            old_alt_conv = [contexbase + alt[:-1] for alt in old_alt_conv]
+            # also change the old_ref_conv for consistency but it assumes that the base context base downstream
+            # of the variant was the same in the old genome
+            old_ref_conv = contexbase + old_ref_conv[:-1]
+        # on the positive strand only modify the context base if it is different.
+        elif new_ref[0] != old_ref_conv[0]:
+            contexbase = new_ref[0]
+            old_alt_conv = [contexbase + alt[1:] for alt in old_alt_conv]
+            old_ref_conv = contexbase + old_ref_conv[1:]
+
+    # 3. Assign new allele sequences
     if new_ref == old_ref_conv:
         new_alts = old_alt_conv
     elif new_ref in old_alt_conv:
@@ -82,7 +90,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Novel Reference Allele length change'
 
-    # 3. Correct zero-length reference sequence
+    # 4. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
         new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1).upper()
