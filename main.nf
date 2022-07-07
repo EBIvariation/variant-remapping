@@ -43,8 +43,8 @@ outfile_basename_without_ext = file(params.outfile).getBaseName()
 outfile_dir = file(params.outfile).getParent()
 
 /*
- * Uncompress VCF file
- */
+ * Uncompress VCF file
+ */
 process uncompressInputVCF {
 
     input:
@@ -66,8 +66,8 @@ process uncompressInputVCF {
 
 
 /*
- * filter VCF file to remove variant too close the edges of chromosome because we can't get flanking regions
- */
+ * filter VCF file to remove variant too close the edges of chromosome because we can't get flanking regions
+ */
 process filterInputVCF {
 
     input:
@@ -91,8 +91,8 @@ process filterInputVCF {
 
 
 /*
- * Store the original VCF header for later use
- */
+ * Store the original VCF header for later use
+ */
 process storeVCFHeader {
 
     input:
@@ -111,8 +111,8 @@ include { process_split_reads; process_split_reads_mid; process_split_reads_long
 
 
 /*
- * This process convert the original Header to the remapped header and concatenate it with the remapped VCF records
- */
+ * This process convert the original Header to the remapped header and concatenate it with the remapped VCF records
+ */
 process generateRemappedVCF {
 
     input:
@@ -145,8 +145,8 @@ process generateRemappedVCF {
 }
 
 /*
- * This process adds the original header to unmapped variant VCF records and output the results
- */
+ * This process adds the original header to unmapped variant VCF records and output the results
+ */
 process generateUnmappedVCF {
 
     publishDir outfile_dir,
@@ -184,8 +184,8 @@ process sortVCF {
 }
 
 /*
- * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
- */
+ * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
+ */
 process normaliseAnOutput {
 
     publishDir outfile_dir,
@@ -205,8 +205,8 @@ process normaliseAnOutput {
 }
 
 /*
- * Create file containing remapping stats
- */
+ * Create file containing remapping stats
+ */
 process outputStats {
 
     publishDir outfile_dir,
@@ -225,8 +225,8 @@ process outputStats {
 }
 
 /*
- * Concatenate the unmapped variants
- */
+ * Concatenate the unmapped variants
+ */
 process combineUnmappedVCF {
     input:
         path "variants1.vcf"

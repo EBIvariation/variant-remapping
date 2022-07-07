@@ -10,6 +10,7 @@ import pysam
 
 nucleotide_alphabet = {'A', 'T', 'C', 'G'}
 
+
 def reverse_complement(sequence):
     return str(Seq(sequence, generic_dna).reverse_complement())
 
@@ -28,7 +29,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
     new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
                           right_read.reference_start - left_read.reference_end).upper()
 
-    if len(set(new_ref).difference(nucleotide_alphabet)) != 0 :
+    if len(set(new_ref).difference(nucleotide_alphabet)) != 0:
         failure_reason = 'Reference Allele not in ACGT'
 
     new_pos = left_read.reference_end + 1
@@ -44,6 +45,16 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         old_ref_conv = reverse_complement(old_ref)
         old_alt_conv = [reverse_complement(alt) for alt in old_alts]
         operations['st'] = '-'
+        #  if it is a deletion, the context base of the ref and alts needs to be removed and replaced with the one
+        #  uptream
+        if len(old_ref) > min([len(alt) for alt in old_alts]):
+            new_pos -= 1
+            new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, len(new_ref)).upper()
+            contexbase = new_ref[0]
+            old_alt_conv = [contexbase + alt[:-1] for alt in old_alt_conv]
+            # also change the old_ref_conv for consistency but it assumes that the base context base downstream
+            # of the variant was the same in the old genome
+            old_ref_conv = contexbase + old_ref_conv[:-1]
     else:
         # This case should be handled by the filtering but raise just in case...
         error_msg = (f'Impossible read configuration: '
@@ -67,7 +78,7 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
         operations['rac'] = old_ref_conv + '-' + new_ref
-        operations['nra'] = None
+        operations['nra'] = old_ref_conv
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Novel Reference Allele length change'
 
