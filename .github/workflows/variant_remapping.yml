@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         # Install dependencies
-        apt-get install libgsl0-dev
+        sudo apt-get install libgsl0-dev
         # Install Nextflow
         mkdir /tmp/nextflow && cd /tmp/nextflow
         wget -qO- get.nextflow.io | bash
