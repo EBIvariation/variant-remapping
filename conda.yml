@@ -6,6 +6,6 @@ channels:
 dependencies:
   - bedtools
   - minimap2
-  - samtools==1.13
-  - bcftools==1.13
+  - samtools
+  - bcftools
   - tabix
