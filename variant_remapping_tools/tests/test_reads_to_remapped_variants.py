@@ -63,7 +63,7 @@ class TestProcess(TestCase):
 
         expected = [
             'chr2	98	.	C	CG	50	PASS	st=+	GT:GQ	1/1:0\n',
-            'chr2	1078	.	A	G	50	PASS	st=+;rac=chr2|1078|G|A	GT	0/0\n',
+            'chr2	1078	.	A	G	50	PASS	st=+;rac=chr2|1078|G-A	GT	0/0\n',
             'chr2	1818	.	AAC	A	50	PASS	st=+	GT:GQ	1/1:0\n',
             'chr2	2030	.	A	TCC	50	PASS	st=+	GT:GQ	1/1:0\n'
         ]
@@ -147,9 +147,9 @@ class TestProcess(TestCase):
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
             var_generator = calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)
             assert next(var_generator) == \
-                   (48, 'C', ['A'], {'st': '+', 'rac': 'T-C'}, None)
+                   (48, 'C', ['A'], {'st': '+', 'rac': 'chr2|48|T-C'}, None)
             assert next(var_generator) == \
-                   (48, 'C', ['T'], {'st': '+', 'rac': 'T-C', 'nra': 'T'}, None)
+                   (48, 'C', ['T'], {'st': '+', 'rac': 'chr2|48|T-C', 'nra': 'T'}, None)
 
         # Forward strand alignment for Deletion
         left_read = self.mk_read(reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
@@ -190,9 +190,9 @@ class TestProcess(TestCase):
             var_generator = calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)
 
             assert next(var_generator) == \
-                   (46, 'ACATA', ['A'], {'st': '-', 'rac': 'ACACA-ACATA'}, None)
+                   (46, 'ACATA', ['A'], {'st': '-', 'rac': 'chr2|46|ACACA-ACATA'}, None)
             assert next(var_generator) == \
-                   (46, 'ACATA', ['ACACA'], {'st': '-', 'rac': 'ACACA-ACATA', 'nra': 'ACACA'}, None)
+                   (46, 'ACATA', ['ACACA'], {'st': '-', 'rac': 'chr2|46|ACACA-ACATA', 'nra': 'ACACA'}, None)
 
         #  reverse strand alignment for Insertion
         # For insertion there cannot be a reference allele change on the negative strand because the reference allele

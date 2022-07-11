@@ -83,13 +83,13 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
         old_alt_conv.remove(new_ref)
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
-        operations['rac'] = f'{contig}|{new_pos}|{old_ref_conv}|{new_ref}'
+        operations['rac'] = f'{contig}|{new_pos}|{old_ref_conv}-{new_ref}'
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Reference Allele length change'
     else:
         new_alts = old_alt_conv
         # new_alts.append(old_ref_conv)
-        operations['rac'] = old_ref_conv + '-' + new_ref
+        operations['rac'] = f'{contig}|{new_pos}|{old_ref_conv}-{new_ref}'
         # Instead of adding to the list of ALT, we'll produce the novel reference allele as a separate record
         novel_reference_allele = old_ref_conv
         if len(old_ref_conv) != len(new_ref):
@@ -105,9 +105,9 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
     yield new_pos, new_ref, new_alts, operations, failure_reason
 
     if novel_reference_allele:
-        operations = copy.copy(operations)
-        operations['nra'] = old_ref_conv
-        yield new_pos, new_ref, [novel_reference_allele], operations, failure_reason
+        operations_new_rec = copy.copy(operations)
+        operations_new_rec['nra'] = old_ref_conv
+        yield new_pos, new_ref, [novel_reference_allele], operations_new_rec, failure_reason
 
 
 def update_vcf_record(reference_name, varpos, new_ref, new_alts, operations, original_vcf_rec):
