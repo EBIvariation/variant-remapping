@@ -200,7 +200,7 @@ process normaliseAnOutput {
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools norm --check-ref e -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm --check-ref e -f genome.fa --old-rec-tag PRE_NORM variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
