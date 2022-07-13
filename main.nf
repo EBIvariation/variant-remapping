@@ -186,21 +186,37 @@ process sortVCF {
 /*
  * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
  */
-process normaliseAnOutput {
-
-    publishDir outfile_dir,
-        overwrite: true,
-        mode: "copy"
+process normalise {
 
     input:
         path "variants_remapped_sorted.vcf.gz"
         path "genome.fa"
 
     output:
+        path "variants_remapped_sorted_normalized.vcf.gz", emit: variants_remapped_sorted_normalized_gz
+
+    """
+    bcftools norm --check-ref e -f genome.fa --old-rec-tag PRE_NORM variants_remapped_sorted.vcf.gz -o variants_remapped_sorted_normalized.vcf.gz -O z
+    """
+}
+
+
+process nraAndOutput {
+
+    publishDir outfile_dir,
+        overwrite: true,
+        mode: "copy"
+
+    input:
+        path "variants_remapped_sorted_normalized.vcf.gz"
+
+    output:
+        path "nra_variants.vcf.gz", emit: nra_variants_vcf
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools norm --check-ref e -f genome.fa --old-rec-tag PRE_NORM variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
+    bcftools filter -i 'INFO/nra=1' variants_remapped_sorted_normalized.vcf.gz -o nra_variants_vcf.gz -O z
+    bcftools filter -e 'INFO/nra=1' variants_remapped_sorted_normalized.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
@@ -282,7 +298,8 @@ workflow finalise {
         generateUnmappedVCF(vcf_header, variants_unmapped)
         generateRemappedVCF(vcf_header, variants_remapped)
         sortVCF(generateRemappedVCF.out.final_vcf_with_header)
-        normaliseAnOutput(sortVCF.out.variants_remapped_sorted_gz, genome)
+        normalise(sortVCF.out.variants_remapped_sorted_gz, genome)
+        nraAndOutput(normalise.out.variants_remapped_sorted_normalized_gz)
         outputStats(summary)
 }
 
