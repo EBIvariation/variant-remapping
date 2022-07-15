@@ -215,7 +215,7 @@ process nraAndOutput {
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools filter -i 'INFO/nra=1' variants_remapped_sorted_normalized.vcf.gz -o nra_variants_vcf.gz -O z
+    bcftools filter -i 'INFO/nra=1' variants_remapped_sorted_normalized.vcf.gz -o nra_variants.vcf.gz -O z
     bcftools filter -e 'INFO/nra=1' variants_remapped_sorted_normalized.vcf.gz -o ${outfile_basename} -O v
     """
 }
