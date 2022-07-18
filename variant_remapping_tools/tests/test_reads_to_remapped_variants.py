@@ -196,6 +196,7 @@ class TestProcess(TestCase):
 
         #  reverse strand alignment for Insertion
         # For insertion there cannot be a reference allele change on the negative strand because the reference allele
+        # is only the contex base
         # variant:  C -> CTGTG
         # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
         # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
@@ -216,7 +217,7 @@ class TestProcess(TestCase):
                    (46, 'A', ['ACACA'], {'st': '-'}, None)
 
         # Forward strand alignment for Insertion
-        # Reference context base changes should not create a reference allele change because it's not part of the variant.
+        # Reference context base changes should not create reference allele change because it's not part of the variant.
         # variant:  C -> CTGTG
         # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
         # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
