@@ -225,7 +225,7 @@ class TestProcess(TestCase):
         #          ---------------->****<--------------
         # NEW REF  UUUUUUUUUUUUUUUUUT----DDDDDDDDDDDDDDD
         # NEW ALT  UUUUUUUUUUUUUUUUUTTGTGDDDDDDDDDDDDDDD
-        # variant:  C -> CTGTG
+        # variant:  T -> TTGTG
         left_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=1,
                                  reference_end=46, is_reverse=False)
         right_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=50,
