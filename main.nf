@@ -43,8 +43,8 @@ outfile_basename_without_ext = file(params.outfile).getBaseName()
 outfile_dir = file(params.outfile).getParent()
 
 /*
- * Uncompress VCF file
- */
+ * Uncompress VCF file
+ */
 process uncompressInputVCF {
 
     input:
@@ -66,8 +66,8 @@ process uncompressInputVCF {
 
 
 /*
- * filter VCF file to remove variant too close the edges of chromosome because we can't get flanking regions
- */
+ * filter VCF file to remove variant too close the edges of chromosome because we can't get flanking regions
+ */
 process filterInputVCF {
 
     input:
@@ -91,8 +91,8 @@ process filterInputVCF {
 
 
 /*
- * Store the original VCF header for later use
- */
+ * Store the original VCF header for later use
+ */
 process storeVCFHeader {
 
     input:
@@ -111,8 +111,8 @@ include { process_split_reads; process_split_reads_mid; process_split_reads_long
 
 
 /*
- * This process convert the original Header to the remapped header and concatenate it with the remapped VCF records
- */
+ * This process convert the original Header to the remapped header and concatenate it with the remapped VCF records
+ */
 process generateRemappedVCF {
 
     input:
@@ -135,7 +135,7 @@ process generateRemappedVCF {
     # Add variant remapping INFO definition to the header
     echo -e '##INFO=<ID=st,Number=1,Type=String,Description="Strand change observed in the alignment.">' >> temp_header.txt
     echo -e '##INFO=<ID=rac,Number=1,Type=String,Description="Reference allele change during the alignment.">' >> temp_header.txt
-    echo -e '##INFO=<ID=nra,Number=0,Type=Flag,Description="Novel reference allele that was not observed in the previous set of alternate">' >> temp_header.txt
+    echo -e '##INFO=<ID=nra,Number=1,Type=String,Description="Novel reference has been inserted: describes the previous allele removed">' >> temp_header.txt
     echo -e '##INFO=<ID=zlr,Number=0,Type=Flag,Description="Zero length allele. Had to be expanded from the reference.">' >> temp_header.txt
     # Add the two headers together and add the column names
     cat temp_header.txt contigs.txt > final_header.txt
@@ -145,8 +145,8 @@ process generateRemappedVCF {
 }
 
 /*
- * This process adds the original header to unmapped variant VCF records and output the results
- */
+ * This process adds the original header to unmapped variant VCF records and output the results
+ */
 process generateUnmappedVCF {
 
     publishDir outfile_dir,
@@ -184,8 +184,8 @@ process sortVCF {
 }
 
 /*
- * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
- */
+ * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
+ */
 process normaliseAnOutput {
 
     publishDir outfile_dir,
@@ -200,13 +200,13 @@ process normaliseAnOutput {
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools norm --check-ref e -f genome.fa  variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
+    bcftools norm --check-ref e -f genome.fa --old-rec-tag PRE_NORM variants_remapped_sorted.vcf.gz -o ${outfile_basename} -O v
     """
 }
 
 /*
- * Create file containing remapping stats
- */
+ * Create file containing remapping stats
+ */
 process outputStats {
 
     publishDir outfile_dir,
@@ -225,8 +225,8 @@ process outputStats {
 }
 
 /*
- * Concatenate the unmapped variants
- */
+ * Concatenate the unmapped variants
+ */
 process combineUnmappedVCF {
     input:
         path "variants1.vcf"

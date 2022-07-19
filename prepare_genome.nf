@@ -6,8 +6,8 @@ nextflow.enable.dsl=2
 
 
 /*
-* Index the new reference genome using bowtie_build
-*/
+ * Index the new reference genome using bowtie_build
+ */
 process bowtieGenomeIndex {
     // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
     memory Math.max(file(params.newgenome).size() * 10, 1073741824) + ' B'

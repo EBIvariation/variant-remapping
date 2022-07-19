@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 import argparse
+import copy
 from argparse import RawTextHelpFormatter
 from collections import Counter, defaultdict
 
@@ -10,25 +11,29 @@ import pysam
 
 nucleotide_alphabet = {'A', 'T', 'C', 'G'}
 
+
 def reverse_complement(sequence):
     return str(Seq(sequence, generic_dna).reverse_complement())
 
 
-def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_vcf_rec):
+def calculate_new_variants_definition(left_read, right_read, ref_fasta, original_vcf_rec):
     """
     Resolve the variant definition from the flanking region alignment and old variant definition
     TODO: Link to algorithm description once public
     """
     # Flag to highlight low confidence in an event detected
     failure_reason = None
+    # Flag to store novel reference allele
+    novel_reference_allele = None
     old_ref = original_vcf_rec[3]
     old_alts = original_vcf_rec[4].split(',')
     operations = {}
+    contig = left_read.reference_name
     # Define new ref and new pos
-    new_ref = fetch_bases(ref_fasta, left_read.reference_name, left_read.reference_end + 1,
+    new_ref = fetch_bases(ref_fasta, contig, left_read.reference_end + 1,
                           right_read.reference_start - left_read.reference_end).upper()
 
-    if len(set(new_ref).difference(nucleotide_alphabet)) != 0 :
+    if len(set(new_ref).difference(nucleotide_alphabet)) != 0:
         failure_reason = 'Reference Allele not in ACGT'
 
     new_pos = left_read.reference_end + 1
@@ -53,32 +58,56 @@ def calculate_new_variant_definition(left_read, right_read, ref_fasta, original_
                      f'read2 position: {right_read.pos}')
         raise ValueError(error_msg)
 
-    # 2. Assign new allele sequences
+    # 2. In the case of insertion or deletions we need to ensure the context base are updated correctly
+    if any([len(old_ref) != len(alt) for alt in old_alts]):
+        # On the negative strand  the context base of the ref and alts needs to be removed
+        #  and replaced with the one upstream
+        if operations['st'] == '-':
+            new_pos -= 1
+            new_ref = fetch_bases(ref_fasta, contig, new_pos, len(new_ref)).upper()
+            contextbase = new_ref[0]
+            old_alt_conv = [contexbase + alt[:-1] for alt in old_alt_conv]
+            # also change the old_ref_conv for consistency but it assumes that the base context base downstream
+            # of the variant was the same in the old genome
+            old_ref_conv = contexbase + old_ref_conv[:-1]
+        # on the positive strand only modify the context base if it is different.
+        elif new_ref[0] != old_ref_conv[0]:
+            contexbase = new_ref[0]
+            old_alt_conv = [contexbase + alt[1:] for alt in old_alt_conv]
+            old_ref_conv = contexbase + old_ref_conv[1:]
+
+    # 3. Assign new allele sequences
     if new_ref == old_ref_conv:
         new_alts = old_alt_conv
     elif new_ref in old_alt_conv:
         old_alt_conv.remove(new_ref)
         new_alts = old_alt_conv
         new_alts.append(old_ref_conv)
-        operations['rac'] = old_ref_conv + '-' + new_ref
+        operations['rac'] = f'{contig}|{new_pos}|{old_ref_conv}-{new_ref}'
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Reference Allele length change'
     else:
         new_alts = old_alt_conv
-        new_alts.append(old_ref_conv)
-        operations['rac'] = old_ref_conv + '-' + new_ref
-        operations['nra'] = None
+        # new_alts.append(old_ref_conv)
+        operations['rac'] = f'{contig}|{new_pos}|{old_ref_conv}-{new_ref}'
+        # Instead of adding to the list of ALT, we'll produce the novel reference allele as a separate record
+        novel_reference_allele = old_ref_conv
         if len(old_ref_conv) != len(new_ref):
             failure_reason = 'Novel Reference Allele length change'
 
-    # 3. Correct zero-length reference sequence
+    # 4. Correct zero-length reference sequence
     if len(new_ref) == 0:
         new_pos -= 1
-        new_ref = fetch_bases(ref_fasta, left_read.reference_name, new_pos, 1).upper()
+        new_ref = fetch_bases(ref_fasta, contig, new_pos, 1).upper()
         new_alts = [new_ref + alt for alt in new_alts]
         operations['zlr'] = None
 
-    return new_pos, new_ref, new_alts, operations, failure_reason
+    yield new_pos, new_ref, new_alts, operations, failure_reason
+
+    if novel_reference_allele:
+        operations_new_rec = copy.copy(operations)
+        operations_new_rec['nra'] = old_ref_conv
+        yield new_pos, new_ref, [novel_reference_allele], operations_new_rec, failure_reason
 
 
 def update_vcf_record(reference_name, varpos, new_ref, new_alts, operations, original_vcf_rec):
@@ -257,25 +286,28 @@ def process_bam_file(bam_file_paths, output_file, out_failed_file, new_genome,
                 primary_to_supplementary = link_supplementary(primary_group, supplementary_group)
                 # Retrieve the full VCF record from the bam vr tag
                 original_vcf_rec = primary_group[0].get_tag('vr').split('|^')
-                if pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter, filter_align_with_secondary):
-                    left_read, right_read = order_reads(primary_group, primary_to_supplementary)
-                    if pass_aligned_filtering(left_read, right_read, counter):
-                        varpos, new_ref, new_alts, ops, failure_reason = \
-                            calculate_new_variant_definition(left_read, right_read, fasta, original_vcf_rec)
-                        if not failure_reason:
-                            counter['Remapped'] += 1
-                            update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
-                            output_alignment(original_vcf_rec, outfile)
-                        else:
-                            # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
-                            # novel reference allele are correct. So we skip them.
-                            # TODO: add realignment confirmation see #14 and EVA-2417
-                            counter[failure_reason] += 1
-                            output_alignment(original_vcf_rec, out_failed)
-                    else:
-                        output_alignment(original_vcf_rec, out_failed)
-                else:
+                if not pass_basic_filtering(primary_group, secondary_group, primary_to_supplementary, counter,
+                                            filter_align_with_secondary):
                     output_alignment(original_vcf_rec, out_failed)
+                    continue
+                left_read, right_read = order_reads(primary_group, primary_to_supplementary)
+                if not pass_aligned_filtering(left_read, right_read, counter):
+                    output_alignment(original_vcf_rec, out_failed)
+                    continue
+
+                for varpos, new_ref, new_alts, ops, failure_reason in calculate_new_variants_definition(
+                        left_read, right_read, fasta, original_vcf_rec):
+                    if not failure_reason:
+                        counter['Remapped'] += 1
+                        update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
+                        output_alignment(original_vcf_rec, outfile)
+                    else:
+                        # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
+                        # novel reference allele are correct. So we skip them.
+                        # TODO: add realignment confirmation see #14 and EVA-2417
+                        counter[failure_reason] += 1
+                        output_alignment(original_vcf_rec, out_failed)
+
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
 

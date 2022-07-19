@@ -7,7 +7,7 @@ from unittest import TestCase
 
 
 from variant_remapping_tools.reads_to_remapped_variants import fetch_bases, process_bam_file, \
-    calculate_new_variant_definition, order_reads, link_supplementary, pass_aligned_filtering, group_reads, \
+    calculate_new_variants_definition, order_reads, link_supplementary, pass_aligned_filtering, \
     update_vcf_record
 
 
@@ -63,7 +63,7 @@ class TestProcess(TestCase):
 
         expected = [
             'chr2	98	.	C	CG	50	PASS	st=+	GT:GQ	1/1:0\n',
-            'chr2	1078	.	A	G	50	PASS	st=+;rac=G-A	GT	0/0\n',
+            'chr2	1078	.	A	G	50	PASS	st=+;rac=chr2|1078|G-A	GT	0/0\n',
             'chr2	1818	.	AAC	A	50	PASS	st=+	GT:GQ	1/1:0\n',
             'chr2	2030	.	A	TCC	50	PASS	st=+	GT:GQ	1/1:0\n'
         ]
@@ -121,7 +121,7 @@ class TestProcess(TestCase):
         assert left_read == supplementary_read
         assert right_read == primary_group[1]
 
-    def test_calculate_new_variant_definition(self):
+    def test_calculate_new_variants_definition(self):
         fasta = 'fasta_path'
 
         # Forward strand alignment for SNP
@@ -129,7 +129,7 @@ class TestProcess(TestCase):
         right_read = self.mk_read(reference_name='chr2', reference_start=48, reference_end=108, is_reverse=False)
         vcf_rec = ['chr1', '48', '.', 'C', 'A']
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
+            assert next(calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)) == \
                    (48, 'C', ['A'], {'st': '+'}, None)
 
         # Reverse strand alignment for SNP
@@ -137,7 +137,7 @@ class TestProcess(TestCase):
         right_read = self.mk_read(reference_name='chr2', reference_start=48, reference_end=108, is_reverse=True)
         vcf_rec = ['chr1', '48', '.', 'C', 'A,T']
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='G'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
+            assert next(calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)) == \
                    (48, 'G', ['T', 'A'], {'st': '-'}, None)
 
         # Forward strand alignment for SNP with novel allele
@@ -145,15 +145,18 @@ class TestProcess(TestCase):
         right_read = self.mk_read(reference_name='chr2', reference_start=48, reference_end=108, is_reverse=False)
         vcf_rec = ['chr1', '48', '.', 'T', 'A']
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='C'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
-                   (48, 'C', ['A', 'T'], {'st': '+', 'rac': 'T-C', 'nra': None}, None)
+            var_generator = calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)
+            assert next(var_generator) == \
+                   (48, 'C', ['A'], {'st': '+', 'rac': 'chr2|48|T-C'}, None)
+            assert next(var_generator) == \
+                   (48, 'C', ['T'], {'st': '+', 'rac': 'chr2|48|T-C', 'nra': 'T'}, None)
 
         # Forward strand alignment for Deletion
         left_read = self.mk_read(reference_name='chr2', reference_start=1, reference_end=47, is_reverse=False)
         right_read = self.mk_read(reference_name='chr2', reference_start=50, reference_end=110, is_reverse=False)
         vcf_rec = ['chr1', '48', '.', 'CAA', 'C']
         with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='CAA'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
+            assert next(calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)) == \
                    (48, 'CAA', ['C'], {'st': '+'}, None)
 
         # Reverse strand alignment for a deletion
@@ -164,9 +167,74 @@ class TestProcess(TestCase):
         left_read = self.mk_read(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=1, reference_end=47, is_reverse=True)
         right_read = self.mk_read(query_name='chr1|48|CAA|C', reference_name='chr2', reference_start=50, reference_end=110, is_reverse=True)
         vcf_rec = ['chr1', '48', '.', 'CAA', 'C']
-        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='TTG'):
-            assert calculate_new_variant_definition(left_read, right_read, fasta, vcf_rec) == \
-                   (48, 'TTG', ['G'], {'st': '-'}, None)
+        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', side_effect=['TTG', 'ATT']):
+            assert next(calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)) == \
+                   (47, 'ATT', ['A'], {'st': '-'}, None)
+
+    def test_calculate_new_variant_definition2(self):
+        fasta = 'fasta_path'
+        #  reverse strand alignment for Deletion with novel allele
+        # variant:  CTGTG -> C
+        # OLD REF  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
+        # OLD ALT  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
+
+        #                read 2              read 1
+        #          <----------------CACAG<--------------
+        # NEW REF  DDDDDDDDDDDDDDDDACATAGUUUUUUUUUUUUUUU
+        # NEW ALT  DDDDDDDDDDDDDDDDA----GUUUUUUUUUUUUUUU
+        # variant:  ACATA -> A
+        left_read = self.mk_read(query_name='chr1|48|CTGTG|C', reference_name='chr2', reference_start=1, reference_end=46, is_reverse=True)
+        right_read = self.mk_read(query_name='chr1|48|CTGTG|C', reference_name='chr2', reference_start=50, reference_end=110, is_reverse=True)
+        vcf_rec = ['chr1', '48', '.', 'CTGTG', 'C']
+        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', side_effect=['CATAG', 'ACATA']):
+            var_generator = calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)
+
+            assert next(var_generator) == \
+                   (46, 'ACATA', ['A'], {'st': '-', 'rac': 'chr2|46|ACACA-ACATA'}, None)
+            assert next(var_generator) == \
+                   (46, 'ACATA', ['ACACA'], {'st': '-', 'rac': 'chr2|46|ACACA-ACATA', 'nra': 'ACACA'}, None)
+
+        #  reverse strand alignment for Insertion
+        # For insertion there cannot be a reference allele change on the negative strand because the reference allele
+        # is only the contex base
+        # variant:  C -> CTGTG
+        # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
+        # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
+
+        #                read 2              read 1
+        #          <----------------****G<--------------
+        # NEW REF  DDDDDDDDDDDDDDDDA----GUUUUUUUUUUUUUUU
+        # NEW ALT  DDDDDDDDDDDDDDDDACACAGUUUUUUUUUUUUUUU
+        # variant:  A -> ACACA
+        left_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=1,
+                                 reference_end=46, is_reverse=True)
+        right_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=50,
+                                  reference_end=110, is_reverse=True)
+        vcf_rec = ['chr1', '48', '.', 'C', 'CTGTG']
+        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases',
+                   side_effect=['G', 'A']):
+            assert next(calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)) == \
+                   (46, 'A', ['ACACA'], {'st': '-'}, None)
+
+        # Forward strand alignment for Insertion
+        # Reference context base changes should not create reference allele change because it's not part of the variant.
+        # variant:  C -> CTGTG
+        # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
+        # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
+
+        #                read 1              read 2
+        #          ---------------->****<--------------
+        # NEW REF  UUUUUUUUUUUUUUUUUT----DDDDDDDDDDDDDDD
+        # NEW ALT  UUUUUUUUUUUUUUUUUTTGTGDDDDDDDDDDDDDDD
+        # variant:  T -> TTGTG
+        left_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=1,
+                                 reference_end=46, is_reverse=False)
+        right_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=50,
+                                  reference_end=110, is_reverse=False)
+        vcf_rec = ['chr1', '48', '.', 'C', 'CTGTG']
+        with patch('variant_remapping_tools.reads_to_remapped_variants.fetch_bases', return_value='T'):
+            assert next(calculate_new_variants_definition(left_read, right_read, fasta, vcf_rec)) == \
+                   (47, 'T', ['TTGTG'], {'st': '+'}, None)
 
     def test_update_vcf_record(self):
         # Allele swap no genotype change
@@ -181,8 +249,8 @@ class TestProcess(TestCase):
 
         # Novel reference allele with genotype change
         original_vcf_rec = ['chr1', '10', '.', 'A', 'T', '50', '.', '.', 'GT', '0/1']
-        update_vcf_record('1', 11, 'C', ['A', 'T'], {'rac': 'A-C', 'nra': None}, original_vcf_rec)
-        assert original_vcf_rec == ['1', '11', '.', 'C', 'A,T', '50', '.', 'rac=A-C;nra', 'GT', '1/2']
+        update_vcf_record('1', 11, 'C', ['A', 'T'], {'rac': 'A-C', 'nra': 'A'}, original_vcf_rec)
+        assert original_vcf_rec == ['1', '11', '.', 'C', 'A,T', '50', '.', 'rac=A-C;nra=A', 'GT', '1/2']
 
 
     @staticmethod

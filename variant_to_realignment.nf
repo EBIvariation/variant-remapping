@@ -7,9 +7,9 @@ nextflow.enable.dsl=2
 
 
 /*
- * Convert the VCF file to BED format storing the VCF line in the "name" column and the reference allele in the
+ * Convert the VCF file to BED format storing the VCF line in the "name" column and the reference allele in the
  * "strand" column.
- */
+ */
 process convertVCFToBed {
 
     input:
@@ -35,8 +35,8 @@ process convertVCFToBed {
 }
 
 /*
- * Based on variants BED, generate the BED file for each flank.
- */
+ * Based on variants BED, generate the BED file for each flank.
+ */
 process flankingRegionBed {
 
     input:
@@ -64,8 +64,8 @@ process flankingRegionBed {
 }
 
 /*
- * Extract the actual flanking region in fasta format.
- */
+ * Extract the actual flanking region in fasta format.
+ */
 process flankingRegionFasta {
 
     memory '4 GB'
@@ -88,8 +88,8 @@ process flankingRegionFasta {
 }
 
 /*
- * Extract information about the original variants and put it in the fasta header
- */
+ * Extract information about the original variants and put it in the fasta header
+ */
 process extractVariantInfoToFastaHeader {
 
     memory '6GB'
@@ -147,7 +147,7 @@ process split_fasta {
 }
 
 /*
- * Align sequence with minimap2
+ * Align sequence with minimap2
  */
 process alignWithMinimap {
 
@@ -239,8 +239,8 @@ process alignWithBowtie {
 
 
 /*
- * Take the reads and process them to get the remapped variants
- */
+ * Take the reads and process them to get the remapped variants
+ */
 process readsToRemappedVariants {
 
     input:
@@ -272,9 +272,9 @@ process readsToRemappedVariants {
 }
 
 /*
- * Gather step for remapped and unmapped variants and the summary yaml file
+ * Gather step for remapped and unmapped variants and the summary yaml file
  *
- */
+ */
 process merge_variants {
     input:
         path "remapped*.vcf"
