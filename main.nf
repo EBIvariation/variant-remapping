@@ -201,7 +201,7 @@ process normalise {
 }
 
 
-process nraAndOutput {
+process collectNovelReferenceAlleles {
 
     publishDir outfile_dir,
         overwrite: true,
@@ -299,7 +299,7 @@ workflow finalise {
         generateRemappedVCF(vcf_header, variants_remapped)
         sortVCF(generateRemappedVCF.out.final_vcf_with_header)
         normalise(sortVCF.out.variants_remapped_sorted_gz, genome)
-        nraAndOutput(normalise.out.variants_remapped_sorted_normalized_gz)
+        collectNovelReferenceAlleles(normalise.out.variants_remapped_sorted_normalized_gz)
         outputStats(summary)
 }
 
