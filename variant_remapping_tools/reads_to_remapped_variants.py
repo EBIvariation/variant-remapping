@@ -61,11 +61,11 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
     # 2. In the case of insertion or deletions we need to ensure the context base are updated correctly
     if any([len(old_ref) != len(alt) for alt in old_alts]):
         # On the negative strand  the context base of the ref and alts needs to be removed
-        #  and replaced with the one uptream
+        #  and replaced with the one upstream
         if operations['st'] == '-':
             new_pos -= 1
             new_ref = fetch_bases(ref_fasta, contig, new_pos, len(new_ref)).upper()
-            contexbase = new_ref[0]
+            contextbase = new_ref[0]
             old_alt_conv = [contexbase + alt[:-1] for alt in old_alt_conv]
             # also change the old_ref_conv for consistency but it assumes that the base context base downstream
             # of the variant was the same in the old genome

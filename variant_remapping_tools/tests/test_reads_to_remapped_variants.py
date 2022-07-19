@@ -196,6 +196,7 @@ class TestProcess(TestCase):
 
         #  reverse strand alignment for Insertion
         # For insertion there cannot be a reference allele change on the negative strand because the reference allele
+        # is only the contex base
         # variant:  C -> CTGTG
         # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
         # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
@@ -216,7 +217,7 @@ class TestProcess(TestCase):
                    (46, 'A', ['ACACA'], {'st': '-'}, None)
 
         # Forward strand alignment for Insertion
-        # Reference context base changes should not create a reference allele change because it's not part of the variant.
+        # Reference context base changes should not create reference allele change because it's not part of the variant.
         # variant:  C -> CTGTG
         # OLD REF  UUUUUUUUUUUUUUUUUC----DDDDDDDDDDDDDDD
         # OLD ALT  UUUUUUUUUUUUUUUUUCTGTGDDDDDDDDDDDDDDD
@@ -225,7 +226,7 @@ class TestProcess(TestCase):
         #          ---------------->****<--------------
         # NEW REF  UUUUUUUUUUUUUUUUUT----DDDDDDDDDDDDDDD
         # NEW ALT  UUUUUUUUUUUUUUUUUTTGTGDDDDDDDDDDDDDDD
-        # variant:  C -> CTGTG
+        # variant:  T -> TTGTG
         left_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=1,
                                  reference_end=46, is_reverse=False)
         right_read = self.mk_read(query_name='chr1|48|C|CTGTG', reference_name='chr2', reference_start=50,
