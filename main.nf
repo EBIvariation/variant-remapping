@@ -211,11 +211,11 @@ process collectNovelReferenceAlleles {
         path "variants_remapped_sorted_normalized.vcf.gz"
 
     output:
-        path "nra_variants.vcf.gz", emit: nra_variants_vcf
+        path "${outfile_basename_without_ext}_nra_variants.vcf", emit: nra_variants_vcf
         path "${outfile_basename}", emit: final_output_vcf
 
     """
-    bcftools filter -e 'INFO/nra="."' variants_remapped_sorted_normalized.vcf.gz -o nra_variants.vcf.gz -O z
+    bcftools filter -e 'INFO/nra="."' variants_remapped_sorted_normalized.vcf.gz -o ${outfile_basename_without_ext}_nra_variants.vcf -O v
     bcftools filter -i 'INFO/nra="."' variants_remapped_sorted_normalized.vcf.gz -o ${outfile_basename} -O v
     """
 }
