@@ -13,24 +13,23 @@ The pipeline uses other software that needs to be downloaded and installed local
 ### Installation using conda
 ```bash
 git clone https://github.com/EBIvariation/variant-remapping.git
-conda env create -f conda.yml
+conda env create -f variant-remapping/conda.yml
 conda activate variant-remapping
-pip install -r requirements.txt
+pip install -r variant-remapping/requirements.txt
 ```
 
 ### Installation without conda
 Download, manually install the following program and make sure the executable are in your `PATH`
-- [vcf2bed](https://bedops.readthedocs.io/en/latest/content/reference/file-management/conversion/vcf2bed.html)
-- [bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/index.shtml)
-- [samtools](http://www.htslib.org/download/)
+- [Python](https://www.python.org/downloads/)
+- [samtools and tabix](http://www.htslib.org/download/)
 - [bedtools](https://bedtools.readthedocs.io/en/latest/)
 - [bcftools](http://www.htslib.org/download/)
-- [Python](https://www.python.org/downloads/)
-
+- [minimap2](https://github.com/lh3/minimap2)
+  
 Then run
 ```bash
 git clone https://github.com/EBIvariation/variant-remapping.git
-pip install -r requirements.txt
+pip install -r variant-remapping/requirements.txt
 ```
 
 ## Testing the installation
@@ -60,3 +59,8 @@ nextflow run main.nf
 - the ALT field possibly modified if the strand or REF has changed ID, QUAL, FILT and INFO columns of the input VCF
 - Additional fields in the INFO column
 - FORMAT and Sample columns if they were present in the input
+
+Other files are created alongside the main output:
+- `<output>_nra_variants.vcf` variants successfully remap that landed in a position where the reference allele changed. The output contains the original variant and the original reference allele as alternate.
+- `<output>_unmapped.vcf` original variant that could not be successfully remap
+- `<output>_count.yml` YAML file containing counts associated with each round of remapping
