@@ -133,7 +133,7 @@ process split_fasta {
         val chunk_size
 
     output:
-        path("read_chunk-*"), emit: read_split
+        path("read_chunk-*", emit: read_split)
 
     script:
     if (interleaved_fasta.size() > 0)
