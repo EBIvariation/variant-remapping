@@ -66,15 +66,16 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
             new_pos -= 1
             new_ref = fetch_bases(ref_fasta, contig, new_pos, len(new_ref)).upper()
             contextbase = new_ref[0]
-            old_alt_conv = [contexbase + alt[:-1] for alt in old_alt_conv]
+            old_alt_conv = [contextbase + alt[:-1] for alt in old_alt_conv]
             # also change the old_ref_conv for consistency but it assumes that the base context base downstream
             # of the variant was the same in the old genome
-            old_ref_conv = contexbase + old_ref_conv[:-1]
+            old_ref_conv = contextbase + old_ref_conv[:-1]
         # on the positive strand only modify the context base if it is different.
-        elif new_ref[0] != old_ref_conv[0]:
-            contexbase = new_ref[0]
-            old_alt_conv = [contexbase + alt[1:] for alt in old_alt_conv]
-            old_ref_conv = contexbase + old_ref_conv[1:]
+        elif new_ref and new_ref[0] != old_ref_conv[0]:
+            contextbase = new_ref[0]
+            old_alt_conv = [contextbase + alt[1:] for alt in old_alt_conv]
+            old_ref_conv = contextbase + old_ref_conv[1:]
+        # If new ref is empty then it's a reference allele length change that will be dealt with in next block
 
     # 3. Assign new allele sequences
     if new_ref == old_ref_conv:
