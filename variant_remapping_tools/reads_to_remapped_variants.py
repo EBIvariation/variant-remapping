@@ -62,7 +62,7 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
     if any([len(old_ref) != len(alt) for alt in old_alts]):
         # On the negative strand  the context base of the ref and alts needs to be removed
         #  and replaced with the one upstream
-        if operations['st'] == '-':
+        if new_ref and operations['st'] == '-':
             new_pos -= 1
             new_ref = fetch_bases(ref_fasta, contig, new_pos, len(new_ref)).upper()
             contextbase = new_ref[0]
@@ -295,7 +295,7 @@ def process_bam_file(bam_file_paths, output_file, out_failed_file, new_genome,
                 if not pass_aligned_filtering(left_read, right_read, counter):
                     output_alignment(original_vcf_rec, out_failed)
                     continue
-
+                failure_reasons = set()
                 for varpos, new_ref, new_alts, ops, failure_reason in calculate_new_variants_definition(
                         left_read, right_read, fasta, original_vcf_rec):
                     if not failure_reason:
@@ -303,11 +303,14 @@ def process_bam_file(bam_file_paths, output_file, out_failed_file, new_genome,
                         update_vcf_record(left_read.reference_name, varpos, new_ref, new_alts, ops, original_vcf_rec)
                         output_alignment(original_vcf_rec, outfile)
                     else:
-                        # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
-                        # novel reference allele are correct. So we skip them.
-                        # TODO: add realignment confirmation see #14 and EVA-2417
-                        counter[failure_reason] += 1
-                        output_alignment(original_vcf_rec, out_failed)
+                        failure_reasons.add(failure_reason)
+
+                if failure_reasons:
+                    # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
+                    # novel reference allele are correct. So we skip them.
+                    # TODO: add realignment confirmation see #14 and EVA-2417
+                    counter[failure_reason] += 1
+                    output_alignment(original_vcf_rec, out_failed)
 
     with open(summary_file, 'w') as open_summary:
         yaml.safe_dump({f'Flank_{flank_length}': dict(counter)}, open_summary)
