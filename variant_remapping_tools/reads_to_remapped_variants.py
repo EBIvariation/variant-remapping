@@ -33,9 +33,6 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
     new_ref = fetch_bases(ref_fasta, contig, left_read.reference_end + 1,
                           right_read.reference_start - left_read.reference_end).upper()
 
-    if len(set(new_ref).difference(nucleotide_alphabet)) != 0:
-        failure_reason = 'Reference Allele not in ACGT'
-
     new_pos = left_read.reference_end + 1
 
     # 1. Handle reference strand change
@@ -102,6 +99,9 @@ def calculate_new_variants_definition(left_read, right_read, ref_fasta, original
         new_ref = fetch_bases(ref_fasta, contig, new_pos, 1).upper()
         new_alts = [new_ref + alt for alt in new_alts]
         operations['zlr'] = None
+
+    if len(set(new_ref).difference(nucleotide_alphabet)) != 0:
+        failure_reason = 'Reference Allele not in ACGT'
 
     yield new_pos, new_ref, new_alts, operations, failure_reason
 
@@ -309,7 +309,7 @@ def process_bam_file(bam_file_paths, output_file, out_failed_file, new_genome,
                     # Currently the alignment is not precise enough to ensure that the allele change for INDEL and
                     # novel reference allele are correct. So we skip them.
                     # TODO: add realignment confirmation see #14 and EVA-2417
-                    counter[failure_reason] += 1
+                    counter[','.join(failure_reasons)] += 1
                     output_alignment(original_vcf_rec, out_failed)
 
     with open(summary_file, 'w') as open_summary:
