@@ -20,7 +20,7 @@ cat << EOT > "${SCRIPT_DIR}/resources/source_empty.vcf"
 ##INFO=<ID=COMMENT,Number=1,Type=String,Description="Comment">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Consensus Genotype across all datasets with called genotype">
 ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
-#CHROM	POS	ID	REF	 ALT	QUAL 	FILTER	INFO	FORMAT	HG001
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	HG001
 EOT
 
 nextflow run ${SOURCE_DIR}/main.nf \
