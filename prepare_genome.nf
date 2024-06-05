@@ -9,8 +9,11 @@ nextflow.enable.dsl=2
  * Index the new reference genome using bowtie_build
  */
 process bowtieGenomeIndex {
+    label 'med_time'
+
     // Memory required is 10 times the size of the fasta in Bytes or at least 1GB
-    memory Math.max(file(params.newgenome).size() * 10, 1073741824) + ' B'
+    // Overwrite base_memory so that the standard retry strategy is used
+    ext base_memory: { Math.max(file(params.newgenome).size() * 10, 1073741824) } 
 
     input:
         path "genome_fasta"
@@ -25,6 +28,7 @@ process bowtieGenomeIndex {
 
 
 process samtoolsFaidx {
+    label 'med_time', 'med_mem'
 
     input:
         path "genome_basename"
@@ -41,6 +45,7 @@ process samtoolsFaidx {
  * Extract chomosome/contig sizes
  */
 process chromSizes {
+    label 'short_time', 'small_mem'
 
     input:
         path "genome.fa.fai"

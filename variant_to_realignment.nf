@@ -1,6 +1,5 @@
 #!/usr/bin/env nextflow
 
-
 // Enable syntax extension
 // See https://www.nextflow.io/docs/latest/dsl2.html
 nextflow.enable.dsl=2
@@ -11,6 +10,7 @@ nextflow.enable.dsl=2
  * "strand" column.
  */
 process convertVCFToBed {
+    label 'default_time', 'med_mem'
 
     input:
         path "source.vcf"
@@ -38,6 +38,7 @@ process convertVCFToBed {
  * Based on variants BED, generate the BED file for each flank.
  */
 process flankingRegionBed {
+    label 'default_time', 'med_mem'
 
     input:
         path "variants.bed"
@@ -67,8 +68,7 @@ process flankingRegionBed {
  * Extract the actual flanking region in fasta format.
  */
 process flankingRegionFasta {
-
-    memory '4 GB'
+    label 'default_time', 'med_mem'
 
     input:  
         path "flanking_r1.bed"
@@ -91,8 +91,7 @@ process flankingRegionFasta {
  * Extract information about the original variants and put it in the fasta header
  */
 process extractVariantInfoToFastaHeader {
-
-    memory '6GB'
+    label 'default_time', 'med_mem'
 
     input:  
         path "flanking_r1.bed"
@@ -127,6 +126,7 @@ process extractVariantInfoToFastaHeader {
  * Split fasta entries into multiple chunks
  */
 process split_fasta {
+    label 'short_time', 'small_mem'
 
     input:
         path interleaved_fasta
@@ -150,13 +150,11 @@ process split_fasta {
  * Align sequence with minimap2
  */
 process alignWithMinimap {
+    label 'med_time'
 
-    // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    // Retry on kill (exit status 130) with twice the amount of memory
-    memory { Math.max(file(params.newgenome).size() * 10, 2000000000) * task.attempt + ' B' }
-
-    errorStrategy { task.exitStatus == 130 ? 'retry' : 'terminate' }
-    maxRetries 3
+    // Memory required is 10 times the size of the fasta in Bytes or at least 2GB
+    // Overwrite base_memory so that the standard retry strategy is used
+    ext base_memory: { Math.max(file(params.newgenome).size() * 10, 2000000000) }
 
     input:
         // reads contains paired interleaved (first and second read in the same file)
@@ -167,7 +165,6 @@ process alignWithMinimap {
 
     output:
         path "reads_aligned.bam", emit: reads_aligned_bam
-
 
     script:
     if (flanklength < 500)
@@ -199,6 +196,7 @@ process alignWithMinimap {
  * Sort BAM file by name
  */
 process sortByName {
+    label 'default_time', 'med_mem'
 
     input:
         path "reads_aligned.bam"
@@ -215,9 +213,11 @@ process sortByName {
  * Align sequence with bowtie2
  */
 process alignWithBowtie {
+    label 'med_time'
 
     // Memory required is 5 times the size of the fasta in Bytes or at least 1GB
-    memory Math.max(file(params.newgenome).size() * 5, 1073741824) + ' B'
+    // Overwrite base_memory so that the standard retry strategy is used
+    ext base_memory: { Math.max(file(params.newgenome).size() * 5, 1073741824) }
 
     input:
         path "variant_read1.fa"
@@ -242,6 +242,7 @@ process alignWithBowtie {
  * Take the reads and process them to get the remapped variants
  */
 process readsToRemappedVariants {
+    label 'default_time', 'med_mem'
 
     input:
         path "reads.bam"
@@ -276,6 +277,8 @@ process readsToRemappedVariants {
  *
  */
 process merge_variants {
+    label 'short_time', 'small_mem'
+
     input:
         path "remapped*.vcf"
         path "unmapped*.vcf"
