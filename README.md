@@ -64,3 +64,11 @@ Other files are created alongside the main output:
 - `<output>_nra_variants.vcf` variants successfully remap that landed in a position where the reference allele changed. The output contains the original variant and the original reference allele as alternate.
 - `<output>_unmapped.vcf` original variant that could not be successfully remap
 - `<output>_count.yml` YAML file containing counts associated with each round of remapping
+
+## Configuration
+
+The pipeline relies on Nextflow configuration to set memory and runtime requirements. This is not required for all users, but it is recommended particularly for HPC and cloud environments.
+
+There is an [example config](tests/resources/nextflow.config) used for tests that you can modify for your own needs. The main features are the use of labels to group processes into different categories based on their resource needs (small/medium/large), and the use of `base_memory` and `base_time` variables that some processes use to fine-tune their requirements.
+
+For more about Nextflow configuration, see the [documentation](https://www.nextflow.io/docs/latest/config.html).
