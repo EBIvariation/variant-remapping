@@ -33,7 +33,7 @@ chr1	3710	.	T	A	50	PASS	.	GT:GQ	1/1:0
 EOT
 
 nextflow run ${SOURCE_DIR}/main.nf \
--config ${SCRIPT_DIR}/resources/config.yml \
+-config ${SCRIPT_DIR}/resources/nextflow.config \
 --oldgenome ${SCRIPT_DIR}/resources/genome.fa \
 --newgenome ${SCRIPT_DIR}/resources/new_genome.fa \
 --vcffile ${SCRIPT_DIR}/resources/source.vcf \

@@ -1,6 +1,5 @@
 #!/usr/bin/env nextflow
 
-
 // Enable syntax extension
 // See https://www.nextflow.io/docs/latest/dsl2.html
 nextflow.enable.dsl=2
@@ -46,6 +45,7 @@ outfile_dir = file(params.outfile).getParent()
  * Uncompress VCF file
  */
 process uncompressInputVCF {
+    label 'short_time', 'med_mem'
 
     input:
         path "source.vcf"
@@ -69,6 +69,7 @@ process uncompressInputVCF {
  * filter VCF file to remove variant too close the edges of chromosome because we can't get flanking regions
  */
 process filterInputVCF {
+    label 'default_time', 'med_mem'
 
     input:
         path "source.vcf"
@@ -94,6 +95,7 @@ process filterInputVCF {
  * Store the original VCF header for later use
  */
 process storeVCFHeader {
+    label 'short_time', 'small_mem'
 
     input:
         path "source.vcf"
@@ -114,6 +116,7 @@ include { process_split_reads; process_split_reads_mid; process_split_reads_long
  * This process convert the original Header to the remapped header and concatenate it with the remapped VCF records
  */
 process generateRemappedVCF {
+    label 'short_time', 'small_mem'
 
     input:
         path "vcf_header.txt"
@@ -148,6 +151,7 @@ process generateRemappedVCF {
  * This process adds the original header to unmapped variant VCF records and output the results
  */
 process generateUnmappedVCF {
+    label 'short_time', 'small_mem'
 
     publishDir outfile_dir,
         overwrite: true,
@@ -170,6 +174,7 @@ process generateUnmappedVCF {
  * Sort VCF file
  */
 process sortVCF {
+    label 'default_time', 'med_mem'
 
     input:
         path "variants_remapped.vcf"
@@ -187,6 +192,7 @@ process sortVCF {
  * Run bcftools norm to swap the REF and ALT alleles if the REF doesn't match the new assembly
  */
 process normalise {
+    label 'default_time', 'med_mem'
 
     input:
         path "variants_remapped_sorted.vcf.gz"
@@ -202,6 +208,7 @@ process normalise {
 
 
 process collectNovelReferenceAlleles {
+    label 'short_time', 'small_mem'
 
     publishDir outfile_dir,
         overwrite: true,
@@ -224,6 +231,7 @@ process collectNovelReferenceAlleles {
  * Create file containing remapping stats
  */
 process outputStats {
+    label 'short_time', 'small_mem'
 
     publishDir outfile_dir,
         overwrite: true,
@@ -244,6 +252,8 @@ process outputStats {
  * Concatenate the unmapped variants
  */
 process combineUnmappedVCF {
+    label 'short_time', 'small_mem'
+
     input:
         path "variants1.vcf"
         path "variants2.vcf"
@@ -258,6 +268,8 @@ process combineUnmappedVCF {
 
 
 process combineVCF {
+    label 'short_time', 'small_mem'
+
     input:
         path "variants1.vcf"
         path "variants2.vcf"
@@ -271,6 +283,8 @@ process combineVCF {
 }
 
 process combineYaml {
+    label 'short_time', 'small_mem'
+
     input:
         path "initial_yml"
         path "round1.yml"

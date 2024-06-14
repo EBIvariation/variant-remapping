@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
 
     steps:
     - uses: actions/checkout@v2
@@ -29,6 +29,8 @@ jobs:
         echo "/tmp/nextflow" >> $GITHUB_PATH
         cd -
         # $CONDA is an environment variable pointing to the root of the miniconda directory
+        $CONDA/bin/conda update conda
+        $CONDA/bin/conda install -y python=${{ matrix.python-version }}
         $CONDA/bin/conda env update -q --file conda.yml --name base
         $CONDA/bin/conda run pip install -q -r requirements.txt
 

@@ -1,5 +1,0 @@
-executor {
-  $local {
-      memory = '6 GB'
-  }
-}
