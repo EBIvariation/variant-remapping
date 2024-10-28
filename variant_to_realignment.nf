@@ -138,9 +138,9 @@ process alignWithMinimap {
 
 
     script:
-    split_prefix = ""
-    if (file(params.newgenome).size() > 4294967296){
-        split_prefix = " --split-prefix prefix "
+    $index_size = ""
+    if (file(params.newgenome).size() > 4000000000){
+        index_size = " -I " + file(params.newgenome).size() * 1.1
     }
     if (flanklength < 500)
         """
@@ -151,7 +151,7 @@ process alignWithMinimap {
         # --secondary=yes -N 2 --> allow up to 2 secondary alignments
         # -y option will take the comment from the fasta entry and output it
         # the awk script will convert this comment in valid SAM tag
-        minimap2 $split_prefix -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
+        minimap2 $index_size -k21 -w11 --sr --frag=yes -A2 -B5 -O6,16 --end-bonus 20 -E2,1 -r50 -p.5 -z 800,200\
                  -f1000,5000 -n2 -m20 -s40 -g200 -2K50m --heap-sort=yes --secondary=yes -N 2 -y \
                  -a genome.fa variant_read1.fa variant_read2.fa | \
                  awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
@@ -159,7 +159,7 @@ process alignWithMinimap {
         """
     else
         """
-        minimap2 $split_prefix -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
+        minimap2 $index_size -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
                  --secondary=yes -N 2 -y \
                  -a genome.fa variant_read1.fa variant_read2.fa | \
                  awk -F '\\t' 'BEGIN{OFS="\\t"}{if(!/^@/){\$NF="vr:Z:"\$NF}; print \$0;}' | \
