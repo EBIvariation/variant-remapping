@@ -138,7 +138,7 @@ process alignWithMinimap {
 
 
     script:
-    $index_size = ""
+    index_size = ""
     if (file(params.newgenome).size() > 4000000000){
         index_size = " -I " + file(params.newgenome).size() * 1.1
     }
