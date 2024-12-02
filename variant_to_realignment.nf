@@ -173,6 +173,7 @@ process alignWithMinimap {
     }
     if (flanklength < 500)
         """
+        set -o pipefail
         # Options used by the 'sr' preset with some modifications:
         # -O6,16 instead of -O12,32 --> reduce indel cost
         # -B5 instead of -B10 --> reduce mismatch cost
@@ -188,6 +189,7 @@ process alignWithMinimap {
         """
     else
         """
+        set -o pipefail
         minimap2 $index_size -k19 -w19 -A2 -B5 -O6,16 --end-bonus 20 -E3,1 -s200 -z200 -N50 --min-occ-floor=100 \
                  --secondary=yes -N 2 -y \
                  -a genome.fa ${reads} | \
