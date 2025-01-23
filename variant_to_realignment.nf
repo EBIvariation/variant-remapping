@@ -126,7 +126,7 @@ process extractVariantInfoToFastaHeader {
  * Split fasta entries into multiple chunks
  */
 process split_fasta {
-    label 'short_time', 'small_mem'
+    label 'default_time', 'small_mem'
 
     input:
         path interleaved_fasta
