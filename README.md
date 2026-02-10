@@ -72,3 +72,4 @@ The pipeline relies on Nextflow configuration to set memory and runtime requirem
 There is an [example config](tests/resources/nextflow.config) used for tests that you can modify for your own needs. The main features are the use of labels to group processes into different categories based on their resource needs (small/medium/large), and the use of `base_memory` and `base_time` variables that some processes use to fine-tune their requirements.
 
 For more about Nextflow configuration, see the [documentation](https://www.nextflow.io/docs/latest/config.html).
+
