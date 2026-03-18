@@ -1,4 +1,4 @@
-pysam==0.19.1
+pysam==0.23.3
 biopython==1.77
 pytest==6.2.2
-pyyaml==5.4
+pyyaml==6.0.1
